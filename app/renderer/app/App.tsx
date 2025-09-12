@@ -170,6 +170,8 @@ export default function App() {
   const [transcription, setTranscription] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [processingStatus, setProcessingStatus] = useState('');
+  const [privacyMode, setPrivacyMode] = useState(false);
+  const [privacyReminder, setPrivacyReminder] = useState(false);
   const audioCapture = useRef(new AudioCapture());
   const isRecordingRef = useRef(false);
 
@@ -267,6 +269,15 @@ export default function App() {
       const unsubscribe = (window as any).electronAPI.onGlobalShortcutToggle(() => {
         console.log('🌐 Global shortcut toggle event received');
         
+        // Check privacy mode first
+        if (privacyMode) {
+          console.log('🔒 Privacy mode active - showing reminder');
+          setPrivacyReminder(true);
+          // Clear reminder after animation
+          setTimeout(() => setPrivacyReminder(false), 2000);
+          return;
+        }
+        
         // Use ref for synchronous state check to prevent race conditions
         const currentlyRecording = isRecordingRef.current;
         console.log(`🔄 Global shortcut toggle, current state: ${currentlyRecording}`);
@@ -359,10 +370,17 @@ export default function App() {
             <span className="opacity-50">•</span>
             <span>{systemInfo?.gpuAvailable ? `${systemInfo.gpuMode} Mode` : 'CPU Mode'}</span>
             <span className="opacity-50">•</span>
-            <span>{systemInfo?.platform === 'win32' ? 'Windows' : systemInfo?.platform || 'Unknown'}</span>
+            <span>{systemInfo?.whisperModel || 'Model loading...'}</span>
             <span className="opacity-50">•</span>
             <div className="flex items-center gap-2">
-              {isRecording ? (
+              {privacyMode ? (
+                <>
+                  <div className={`w-2 h-2 rounded-full ${privacyReminder ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                  <span className={`font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>
+                    🔒 Privacy Mode
+                  </span>
+                </>
+              ) : isRecording ? (
                 <>
                   <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
                   <span className="text-red-500 font-medium">🎤 Recording</span>

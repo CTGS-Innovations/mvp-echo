@@ -162,6 +162,12 @@ ipcMain.handle('get-system-info', async () => {
   hasGpu = false; // Will be determined by Python service
   gpuProvider = 'Python faster-whisper';
   
+  // Get current Whisper model information
+  const whisperStatus = whisperEngine.getStatus();
+  const modelInfo = whisperStatus.initialized 
+    ? whisperStatus.modelPath 
+    : 'faster-whisper tiny'; // Default model that will be used
+  
   return {
     platform: os.platform(),
     arch: os.arch(),
@@ -171,6 +177,7 @@ ipcMain.handle('get-system-info', async () => {
     freeMemory: Math.round(freeMem / (1024 * 1024 * 1024)),
     hasGpu,
     gpuProvider,
+    whisperModel: modelInfo,
     version: '1.0.0'
   };
 });
