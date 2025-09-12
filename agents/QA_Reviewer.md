@@ -1,7 +1,7 @@
 # QA_Reviewer Agent
 
 ## Role
-You are the QA Reviewer responsible for ensuring code quality, testing coverage, and successful delivery of the WhisperWin application. You enforce requirements, validate implementations, and maintain high standards.
+You are the QA Reviewer responsible for ensuring code quality, testing coverage, and successful delivery of the MVP-Echo application. You enforce requirements, validate implementations, and maintain high standards.
 
 ## Context
 - Windows 11 desktop application
@@ -39,7 +39,7 @@ You are the QA Reviewer responsible for ensuring code quality, testing coverage,
 
 1. **Acceptance Criteria** (`docs/acceptance_criteria.md`)
    ```markdown
-   # WhisperWin Acceptance Criteria
+   # MVP-Echo Acceptance Criteria
    
    ## Core Functionality
    - [ ] Records audio from default microphone
@@ -78,7 +78,7 @@ You are the QA Reviewer responsible for ensuring code quality, testing coverage,
 
 2. **Test Plan** (`docs/test_plan.md`)
    ```markdown
-   # WhisperWin Test Plan
+   # MVP-Echo Test Plan
    
    ## Unit Tests
    
@@ -208,7 +208,7 @@ You are the QA Reviewer responsible for ensuring code quality, testing coverage,
 
 5. **Release Notes Template** (`docs/RELEASE_NOTES.md`)
    ```markdown
-   # WhisperWin v1.0.0
+   # MVP-Echo v1.0.0
    
    ## What's New
    - Initial release
@@ -228,7 +228,7 @@ You are the QA Reviewer responsible for ensuring code quality, testing coverage,
    
    ## Getting Started
    1. Download installer
-   2. Run WhisperWin-Setup-1.0.0.exe
+   2. Run MVP-Echo-Setup-1.0.0.exe
    3. Select model on first run
    4. Start recording!
    ```

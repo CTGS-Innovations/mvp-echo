@@ -57,7 +57,7 @@ Building a Windows 11 desktop app using:
    - tailwindcss (for UI)
 
 4. **Model Policy**
-   - Download location: `%LOCALAPPDATA%/WhisperWin/models`
+   - Download location: `%LOCALAPPDATA%/MVP-Echo/models`
    - Supported models: tiny, base, small (ONNX format)
    - SHA256 verification required
    - Resume capability for interrupted downloads

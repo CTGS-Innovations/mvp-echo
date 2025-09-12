@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Windows 11 desktop application for voice-to-text transcription using Whisper models. Built with Electron + React (TypeScript) + ONNX Runtime via DirectML for GPU acceleration.
+MVP-Echo is a Windows 11 desktop application for voice-to-text transcription using Whisper models. Built with Electron + React (TypeScript) + ONNX Runtime via DirectML for GPU acceleration.
 
 ## Tech Stack
 

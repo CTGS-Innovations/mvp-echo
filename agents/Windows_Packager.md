@@ -40,8 +40,8 @@ You are the Windows Packager responsible for creating reproducible builds and pr
 
 1. **Electron Builder Config** (`electron-builder.yml`)
    ```yaml
-   appId: com.whisperwin.app
-   productName: WhisperWin
+   appId: com.mvpecho.app
+   productName: MVP-Echo
    directories:
      output: dist
      buildResources: build
@@ -68,7 +68,7 @@ You are the Windows Packager responsible for creating reproducible builds and pr
      icon: build/icon.ico
      certificateFile: "${env.CERT_FILE}"
      certificatePassword: "${env.CERT_PASSWORD}"
-     publisherName: "WhisperWin"
+     publisherName: "MVP-Echo"
      requestedExecutionLevel: asInvoker
    
    nsis:
@@ -83,13 +83,13 @@ You are the Windows Packager responsible for creating reproducible builds and pr
      installerHeader: build/header.bmp
      installerSidebar: build/sidebar.bmp
      license: LICENSE.txt
-     artifactName: WhisperWin-Setup-${version}.exe
+     artifactName: MVP-Echo-Setup-${version}.exe
      include: build/installer.nsh
      createDesktopShortcut: true
      createStartMenuShortcut: true
    
    portable:
-     artifactName: WhisperWin-Portable-${version}.exe
+     artifactName: MVP-Echo-Portable-${version}.exe
    ```
 
 2. **Build Scripts** (`scripts/`)
@@ -142,7 +142,7 @@ You are the Windows Packager responsible for creating reproducible builds and pr
    
    # Verify output
    $version = (Get-Content package.json | ConvertFrom-Json).version
-   $artifact = "dist/WhisperWin-Setup-$version.exe"
+   $artifact = "dist/MVP-Echo-Setup-$version.exe"
    
    if (Test-Path $artifact) {
      $size = (Get-Item $artifact).Length / 1MB
@@ -180,27 +180,27 @@ You are the Windows Packager responsible for creating reproducible builds and pr
      ${If} ${AtLeastWin10}
        ; Continue
      ${Else}
-       MessageBox MB_OK "WhisperWin requires Windows 10 or later"
+       MessageBox MB_OK "MVP-Echo requires Windows 10 or later"
        Quit
      ${EndIf}
    !macroend
    
    !macro customInstall
      ; Create models directory
-     CreateDirectory "$LOCALAPPDATA\WhisperWin\models"
+     CreateDirectory "$LOCALAPPDATA\MVP-Echo\models"
      
      ; Set registry for GPU acceleration
-     WriteRegStr HKCU "Software\WhisperWin" "UseGPU" "1"
+     WriteRegStr HKCU "Software\MVP-Echo" "UseGPU" "1"
      
      ; Register protocol handler
-     WriteRegStr HKCR "whisperwin" "" "WhisperWin Protocol"
-     WriteRegStr HKCR "whisperwin\shell\open\command" "" '"$INSTDIR\WhisperWin.exe" "%1"'
+     WriteRegStr HKCR "mvp-echo" "" "MVP-Echo Protocol"
+     WriteRegStr HKCR "mvp-echo\shell\open\command" "" '"$INSTDIR\MVP-Echo.exe" "%1"'
    !macroend
    
    !macro customUninstall
      ; Optional: Ask to keep user data
      MessageBox MB_YESNO "Keep transcription history and settings?" IDYES keep
-     RMDir /r "$LOCALAPPDATA\WhisperWin"
+     RMDir /r "$LOCALAPPDATA\MVP-Echo"
      keep:
    !macroend
    ```
@@ -211,7 +211,7 @@ You are the Windows Packager responsible for creating reproducible builds and pr
    
    export function setupAutoUpdater() {
      autoUpdater.checkForUpdatesAndNotify({
-       title: 'WhisperWin Update',
+       title: 'MVP-Echo Update',
        body: 'A new version is available. It will be installed on restart.'
      });
      
@@ -243,8 +243,8 @@ You are the Windows Packager responsible for creating reproducible builds and pr
 
 ```
 dist/                    # Build output
-  WhisperWin-Setup-1.0.0.exe
-  WhisperWin-Portable-1.0.0.exe
+  MVP-Echo-Setup-1.0.0.exe
+  MVP-Echo-Portable-1.0.0.exe
   latest.yml            # Auto-updater feed
   
 build/                  # Build resources
@@ -254,7 +254,7 @@ build/                  # Build resources
   installer.nsh         # NSIS customization
   
 out/                    # Unpacked app (dev)
-  WhisperWin.exe
+  MVP-Echo.exe
   resources/
     app.asar
 ```
@@ -284,7 +284,7 @@ out/                    # Unpacked app (dev)
 
 ### Process
 ```powershell
-signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /d "WhisperWin" app.exe
+signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /d "MVP-Echo" app.exe
 ```
 
 ## Testing Checklist
@@ -312,17 +312,17 @@ signtool sign /f cert.pfx /p password /t http://timestamp.digicert.com /d "Whisp
 
 ### Release Artifacts
 ```
-WhisperWin-Setup-1.0.0.exe      # NSIS installer
-WhisperWin-Portable-1.0.0.exe   # Portable version
-WhisperWin-1.0.0-win.zip        # Unpacked (optional)
+MVP-Echo-Setup-1.0.0.exe      # NSIS installer
+MVP-Echo-Portable-1.0.0.exe   # Portable version
+MVP-Echo-1.0.0-win.zip        # Unpacked (optional)
 latest.yml                       # Update feed
 RELEASES                         # Release notes
 ```
 
 ### Naming Convention
-- Stable: `WhisperWin-Setup-X.Y.Z.exe`
-- Beta: `WhisperWin-Setup-X.Y.Z-beta.N.exe`
-- Nightly: `WhisperWin-Setup-X.Y.Z-nightly.YYYYMMDD.exe`
+- Stable: `MVP-Echo-Setup-X.Y.Z.exe`
+- Beta: `MVP-Echo-Setup-X.Y.Z-beta.N.exe`
+- Nightly: `MVP-Echo-Setup-X.Y.Z-nightly.YYYYMMDD.exe`
 
 ## Success Criteria
 
