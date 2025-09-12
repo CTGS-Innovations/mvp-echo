@@ -26,7 +26,9 @@ def install_whisper():
         
         # Try to install faster-whisper
         try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "faster-whisper"])
+            # Redirect pip output to stderr to avoid interfering with JSON protocol
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "faster-whisper"], 
+                                stdout=sys.stderr, stderr=sys.stderr)
             from faster_whisper import WhisperModel
             log("✅ faster-whisper installed successfully")
             return WhisperModel
@@ -87,6 +89,63 @@ def transcribe_audio(audio_data, model_size="tiny"):
         log(traceback.format_exc())
         return {"error": str(e)}
 
+def transcribe_audio_file(audio_file_path, model_size="tiny"):
+    """Transcribe audio from file path using faster-whisper"""
+    try:
+        WhisperModel = install_whisper()
+        if not WhisperModel:
+            return {"error": "Failed to load faster-whisper"}
+        
+        log(f"Loading faster-whisper model: {model_size}")
+        # Use CPU for MVP, can be changed to "cuda" for GPU acceleration
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        
+        if not os.path.exists(audio_file_path):
+            return {"error": f"Audio file not found: {audio_file_path}"}
+        
+        # Debug: Check file size and basic info
+        import wave
+        try:
+            with wave.open(audio_file_path, 'rb') as wav_file:
+                frames = wav_file.getnframes()
+                sample_rate = wav_file.getframerate()
+                channels = wav_file.getnchannels()
+                duration = frames / sample_rate
+                log(f"WAV file info: {frames} frames, {sample_rate}Hz, {channels} channels, {duration:.2f}s")
+        except Exception as wav_error:
+            log(f"Warning: Could not read WAV file info: {wav_error}")
+        
+        log(f"Transcribing audio file: {audio_file_path}")
+        segments, info = model.transcribe(audio_file_path, 
+                                        beam_size=1,  # Faster but less accurate for debugging
+                                        vad_filter=False,  # Disable voice activity detection
+                                        word_timestamps=False)
+        
+        # Collect all segments into full text
+        full_text = ""
+        segment_count = 0
+        for segment in segments:
+            full_text += segment.text
+            segment_count += 1
+        
+        full_text = full_text.strip()
+        log(f"✅ Transcription successful: '{full_text[:50]}...'")
+        
+        return {
+            "success": True,
+            "text": full_text,
+            "language": info.language,
+            "language_probability": info.language_probability,
+            "segments": segment_count,
+            "model": model_size,
+            "duration": info.duration
+        }
+        
+    except Exception as e:
+        log(f"❌ File transcription error: {e}")
+        log(traceback.format_exc())
+        return {"error": str(e)}
+
 def main():
     """Main service loop - read JSON requests from stdin, output JSON responses"""
     log("🎤 MVP-Echo Whisper Service starting...")
@@ -118,6 +177,17 @@ def main():
                     log(f"Processing transcription request: {len(audio_data)} bytes, model: {model_size}")
                     
                     result = transcribe_audio(audio_data, model_size)
+                    
+                    # Output JSON response
+                    print(json.dumps(result), flush=True)
+                    
+                elif request.get("action") == "transcribe_file":
+                    audio_file = request.get("audio_file", "")
+                    model_size = request.get("model", "tiny")
+                    
+                    log(f"Processing transcription from file: {audio_file}, model: {model_size}")
+                    
+                    result = transcribe_audio_file(audio_file, model_size)
                     
                     # Output JSON response
                     print(json.dumps(result), flush=True)

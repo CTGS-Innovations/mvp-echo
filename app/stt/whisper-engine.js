@@ -26,6 +26,9 @@ class WhisperEngine {
     try {
       console.log(`🎯 Initializing Python Whisper engine with ${modelSize} model...`);
       
+      // Clean up any old temp files first
+      await this.cleanupTempFiles();
+      
       this.modelSize = modelSize;
       
       // Start Python Whisper service
@@ -129,226 +132,52 @@ class WhisperEngine {
 
     return new Promise((resolve, reject) => {
       const requestJson = JSON.stringify(request) + '\n';
+      let responseBuffer = '';
+      let timeoutHandle = null;
       
-      // Set up response handler
+      // Set up response handler for chunked data
       const onData = (data) => {
-        try {
-          const response = JSON.parse(data.toString().trim());
-          this.pythonProcess.stdout.removeListener('data', onData);
-          resolve(response);
-        } catch (error) {
-          this.pythonProcess.stdout.removeListener('data', onData);
-          reject(new Error(`Invalid JSON response: ${data.toString()}`));
+        responseBuffer += data.toString();
+        
+        // Check if we have a complete JSON line
+        const lines = responseBuffer.split('\n');
+        
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          if (line) {
+            try {
+              const response = JSON.parse(line);
+              
+              // Clean up handlers
+              this.pythonProcess.stdout.removeListener('data', onData);
+              if (timeoutHandle) clearTimeout(timeoutHandle);
+              
+              resolve(response);
+              return;
+            } catch (error) {
+              // Invalid JSON, continue waiting for more data
+              console.log(`[Debug] Invalid JSON line: ${line}`);
+            }
+          }
         }
+        
+        // Keep the last incomplete line in buffer
+        responseBuffer = lines[lines.length - 1];
       };
 
-      this.pythonProcess.stdout.once('data', onData);
+      this.pythonProcess.stdout.on('data', onData);
       
       // Send request
       this.pythonProcess.stdin.write(requestJson);
       
-      // Timeout after 30 seconds
-      setTimeout(() => {
+      // Timeout after 60 seconds (longer for model download)
+      timeoutHandle = setTimeout(() => {
         this.pythonProcess.stdout.removeListener('data', onData);
-        reject(new Error('Python service timeout'));
-      }, 30000);
+        reject(new Error('Python service timeout (60s)'));
+      }, 60000);
     });
   }
 
-  /**
-   * Get available execution providers with DirectML for GPU
-   */
-  async getExecutionProviders() {
-    try {
-      // Try different ways to get available providers based on ONNX Runtime version
-      let availableProviders = [];
-      
-      try {
-        // Try newer API first
-        if (ort.env && ort.env.availableProviders) {
-          availableProviders = ort.env.availableProviders;
-        } else if (ort.InferenceSession && ort.InferenceSession.getAvailableProviders) {
-          availableProviders = ort.InferenceSession.getAvailableProviders();
-        } else {
-          // Fallback: assume common providers are available
-          availableProviders = ['CPUExecutionProvider'];
-          if (process.platform === 'win32') {
-            availableProviders.unshift('DmlExecutionProvider'); // Try DirectML first on Windows
-          }
-        }
-      } catch (err) {
-        console.log('⚠️ Could not detect providers automatically, using defaults');
-        availableProviders = ['CPUExecutionProvider'];
-        if (process.platform === 'win32') {
-          availableProviders.unshift('DmlExecutionProvider');
-        }
-      }
-      
-      console.log('🔍 ONNX Runtime available providers:', availableProviders);
-      
-      const providers = [];
-      
-      // Prefer DirectML on Windows for GPU acceleration
-      if (availableProviders.includes('DmlExecutionProvider')) {
-        providers.push('DmlExecutionProvider');
-        console.log('✅ DirectML provider configured - GPU acceleration enabled');
-      }
-      
-      // Try CUDA if available (NVIDIA)
-      if (availableProviders.includes('CUDAExecutionProvider')) {
-        providers.push('CUDAExecutionProvider');
-        console.log('✅ CUDA provider configured - NVIDIA GPU acceleration enabled');
-      }
-      
-      // Always add CPU as fallback
-      providers.push('CPUExecutionProvider');
-      console.log('✅ CPU provider configured - CPU fallback available');
-      
-      return providers;
-    } catch (error) {
-      console.error('❌ Error detecting execution providers:', error);
-      console.log('🔄 Falling back to CPU provider only');
-      return ['CPUExecutionProvider'];
-    }
-  }
-
-  /**
-   * Ensure model exists, download from HuggingFace if needed
-   */
-  async ensureModelExists(modelSize) {
-    const modelsDir = this.getModelsDirectory();
-    const modelPath = path.join(modelsDir, `whisper-${modelSize}.onnx`);
-    
-    if (fs.existsSync(modelPath)) {
-      console.log(`📁 Using existing model: ${modelPath}`);
-      return modelPath;
-    }
-    
-    // Download real Whisper ONNX model from HuggingFace
-    console.log(`📥 Downloading Whisper ${modelSize} ONNX model from HuggingFace...`);
-    
-    try {
-      return await this.downloadWhisperModel(modelSize, modelPath);
-    } catch (error) {
-      console.error(`❌ Failed to download Whisper model: ${error.message}`);
-      console.log(`🔄 Falling back to mock model for MVP demo`);
-      return await this.createMockModel(modelPath);
-    }
-  }
-
-  /**
-   * Get models directory in user's local app data
-   */
-  getModelsDirectory() {
-    const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
-    const modelsDir = path.join(localAppData, 'MVP-Echo', 'models');
-    
-    if (!fs.existsSync(modelsDir)) {
-      fs.mkdirSync(modelsDir, { recursive: true });
-    }
-    
-    return modelsDir;
-  }
-
-  /**
-   * Download real Whisper ONNX model from HuggingFace
-   */
-  async downloadWhisperModel(modelSize, modelPath) {
-    const https = require('https');
-    const { createWriteStream } = require('fs');
-    
-    // HuggingFace ONNX Community model URLs - using decoder models for transcription
-    const modelUrls = {
-      'tiny': 'https://huggingface.co/onnx-community/whisper-tiny.en/resolve/main/onnx/decoder_model.onnx',
-      'base': 'https://huggingface.co/onnx-community/whisper-base.en/resolve/main/onnx/decoder_model.onnx', 
-      'small': 'https://huggingface.co/onnx-community/whisper-small.en/resolve/main/onnx/decoder_model.onnx'
-    };
-    
-    const modelUrl = modelUrls[modelSize];
-    if (!modelUrl) {
-      throw new Error(`Unsupported model size: ${modelSize}. Supported: ${Object.keys(modelUrls).join(', ')}`);
-    }
-    
-    console.log(`🌐 Downloading from: ${modelUrl}`);
-    
-    return new Promise((resolve, reject) => {
-      const file = createWriteStream(modelPath);
-      const request = https.get(modelUrl, (response) => {
-        if (response.statusCode !== 200) {
-          reject(new Error(`Download failed: HTTP ${response.statusCode}`));
-          return;
-        }
-        
-        const totalSize = parseInt(response.headers['content-length'] || '0', 10);
-        let downloadedSize = 0;
-        
-        response.on('data', (chunk) => {
-          downloadedSize += chunk.length;
-          if (totalSize > 0) {
-            const progress = ((downloadedSize / totalSize) * 100).toFixed(1);
-            process.stdout.write(`\r📦 Downloaded ${progress}% (${(downloadedSize / 1024 / 1024).toFixed(1)} MB)`);
-          }
-        });
-        
-        response.pipe(file);
-        
-        file.on('finish', () => {
-          file.close();
-          console.log(`\n✅ Successfully downloaded Whisper ${modelSize} model to ${modelPath}`);
-          
-          // Verify file was created and has reasonable size
-          const stats = fs.statSync(modelPath);
-          if (stats.size < 1024 * 1024) { // Less than 1MB seems suspicious
-            reject(new Error(`Downloaded file seems too small: ${stats.size} bytes`));
-          } else {
-            console.log(`📊 Model file size: ${(stats.size / 1024 / 1024).toFixed(1)} MB`);
-            resolve(modelPath);
-          }
-        });
-        
-        file.on('error', (err) => {
-          fs.unlinkSync(modelPath); // Delete partial file
-          reject(err);
-        });
-      });
-      
-      request.on('error', (err) => {
-        reject(err);
-      });
-      
-      request.setTimeout(300000, () => { // 5 minute timeout
-        request.destroy();
-        reject(new Error('Download timeout (5 minutes)'));
-      });
-    });
-  }
-
-  /**
-   * Create a mock ONNX model for demonstration
-   * In production, this would be replaced with actual model download
-   */
-  async createMockModel(modelPath) {
-    try {
-      // For the MVP demo, we'll simulate the Whisper workflow without a real model
-      // This creates a placeholder file that indicates the model "exists"
-      const mockModelData = JSON.stringify({
-        model_type: 'whisper_mock',
-        version: '1.0.0',
-        description: 'Mock Whisper model for MVP-Echo demo',
-        created: new Date().toISOString()
-      });
-      
-      fs.writeFileSync(modelPath + '.meta', mockModelData);
-      
-      console.log(`📝 Mock model metadata created: ${modelPath}.meta`);
-      
-      // Return a flag that indicates we're using mock mode
-      return 'MOCK_MODEL';
-    } catch (error) {
-      console.error('❌ Failed to create mock model:', error);
-      throw error;
-    }
-  }
 
   /**
    * Process audio and return transcription
@@ -358,24 +187,23 @@ class WhisperEngine {
       throw new Error('Engine not initialized. Call initialize() first.');
     }
 
+    const startTime = Date.now();
+    let tempFilePath = null;
+    
     try {
-      const startTime = Date.now();
-      
-      // Calculate audio characteristics for debugging
-      const audioEnergy = this.calculateAudioEnergy(audioData);
-      const maxAmplitude = Math.max(...Array.from(audioData).map(Math.abs));
-      
-      console.log(`🎤 Processing audio: ${audioData.length} samples`);
-      console.log(`🔊 Audio energy: ${audioEnergy.toFixed(4)}, Max amplitude: ${maxAmplitude.toFixed(4)}`);
+      console.log(`🎤 Processing audio: ${audioData.byteLength} bytes of encoded WebM data`);
 
-      // Send audio to Python Whisper service
+      // Write WebM audio data to temp file for Python Whisper service
+      tempFilePath = await this.writeAudioToTempFile(audioData);
+      
+      // Send file path to Python Whisper service instead of raw data
       const request = {
-        action: 'transcribe',
-        audio_data: Array.from(audioData), // Convert to plain array for JSON
+        action: 'transcribe_file',
+        audio_file: tempFilePath,
         model: this.modelSize
       };
       
-      console.log(`🐍 Sending audio to Python Whisper service...`);
+      console.log(`🐍 Sending audio file to Python Whisper service: ${tempFilePath}`);
       const result = await this.sendRequest(request);
       
       const processingTime = Date.now() - startTime;
@@ -398,14 +226,77 @@ class WhisperEngine {
         segments: result.segments,
         duration: result.duration,
         audioStats: {
-          energy: parseFloat(audioEnergy.toFixed(4)),
-          maxAmplitude: parseFloat(maxAmplitude.toFixed(4)),
-          samples: audioData.length
+          fileSize: audioData.byteLength,
+          format: 'WebM'
         }
       };
       
     } catch (error) {
       console.error('❌ Transcription failed:', error);
+      throw error;
+    } finally {
+      // Clean up temp file immediately and aggressively
+      if (tempFilePath) {
+        try {
+          if (fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+            console.log(`🧹 Cleaned up temp file: ${path.basename(tempFilePath)}`);
+          }
+        } catch (cleanupError) {
+          console.warn('⚠️ Failed to cleanup temp file:', cleanupError);
+          
+          // Schedule cleanup for later if immediate cleanup fails
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(tempFilePath)) {
+                fs.unlinkSync(tempFilePath);
+                console.log(`🧹 Delayed cleanup successful: ${path.basename(tempFilePath)}`);
+              }
+            } catch (e) {
+              console.warn('⚠️ Delayed cleanup also failed:', e);
+            }
+          }, 5000);
+        }
+      }
+    }
+  }
+
+  /**
+   * Write audio data to a temporary WAV file
+   * Note: audioData is actually a WebM-encoded ArrayBuffer from MediaRecorder, not raw PCM
+   */
+  async writeAudioToTempFile(audioData) {
+    const tempDir = os.tmpdir();
+    const tempFilePath = path.join(tempDir, `mvp-echo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}.webm`);
+    
+    console.log(`🎵 Received encoded audio data: ${audioData.constructor.name}, ${audioData.byteLength} bytes`);
+    
+    try {
+      // MediaRecorder produces WebM-encoded audio data, not raw PCM
+      // Instead of trying to convert to WAV, save the WebM data directly
+      // faster-whisper can handle WebM files natively
+      
+      const webmBuffer = Buffer.from(audioData);
+      fs.writeFileSync(tempFilePath, webmBuffer);
+      
+      console.log(`✅ Saved WebM audio file: ${path.basename(tempFilePath)} (${webmBuffer.length} bytes)`);
+      
+      // Verify file was written correctly
+      if (fs.existsSync(tempFilePath)) {
+        const fileSize = fs.statSync(tempFilePath).size;
+        console.log(`📁 File verification: ${fileSize} bytes written to disk`);
+        
+        if (fileSize !== webmBuffer.length) {
+          throw new Error(`File size mismatch: expected ${webmBuffer.length}, got ${fileSize}`);
+        }
+      } else {
+        throw new Error('Temp file was not created');
+      }
+      
+      return tempFilePath;
+      
+    } catch (error) {
+      console.error('❌ Failed to write audio file:', error);
       throw error;
     }
   }
@@ -540,6 +431,41 @@ class WhisperEngine {
   }
 
   /**
+   * Clean up any leftover temp files
+   */
+  async cleanupTempFiles() {
+    try {
+      const tempDir = os.tmpdir();
+      const files = fs.readdirSync(tempDir);
+      
+      let cleanedCount = 0;
+      for (const file of files) {
+        if (file.startsWith('mvp-echo-') && file.endsWith('.wav')) {
+          try {
+            const filePath = path.join(tempDir, file);
+            const stats = fs.statSync(filePath);
+            
+            // Delete files older than 1 hour
+            const ageMs = Date.now() - stats.mtime.getTime();
+            if (ageMs > 3600000) { // 1 hour
+              fs.unlinkSync(filePath);
+              cleanedCount++;
+            }
+          } catch (e) {
+            // Ignore individual file errors
+          }
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        console.log(`🧹 Cleaned up ${cleanedCount} old temp files`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Error during temp file cleanup:', error);
+    }
+  }
+
+  /**
    * Cleanup resources
    */
   async cleanup() {
@@ -564,6 +490,9 @@ class WhisperEngine {
         
         this.pythonProcess = null;
       }
+      
+      // Clean up any leftover temp files
+      await this.cleanupTempFiles();
       
       this.isInitialized = false;
       console.log('🧹 Python Whisper engine cleaned up');

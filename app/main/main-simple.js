@@ -96,42 +96,10 @@ ipcMain.handle('get-system-info', async () => {
   let hasGpu = false;
   let gpuProvider = 'CPU';
   
-  try {
-    const ort = require('onnxruntime-node');
-    let availableProviders = [];
-    
-    // Try different ways to get providers
-    try {
-      if (ort.env && ort.env.availableProviders) {
-        availableProviders = ort.env.availableProviders;
-      } else if (ort.InferenceSession && ort.InferenceSession.getAvailableProviders) {
-        availableProviders = ort.InferenceSession.getAvailableProviders();
-      } else {
-        // Assume basic providers
-        availableProviders = ['CPUExecutionProvider'];
-        if (process.platform === 'win32') {
-          availableProviders.unshift('DmlExecutionProvider');
-        }
-      }
-    } catch (apiError) {
-      console.log('ONNX Runtime API detection failed, using defaults');
-      availableProviders = ['CPUExecutionProvider'];
-    }
-    
-    hasGpu = availableProviders.includes('DmlExecutionProvider') || availableProviders.includes('CUDAExecutionProvider');
-    
-    if (availableProviders.includes('DmlExecutionProvider')) {
-      gpuProvider = 'DirectML';
-    } else if (availableProviders.includes('CUDAExecutionProvider')) {
-      gpuProvider = 'CUDA';
-    } else {
-      gpuProvider = 'CPU';
-    }
-    
-    console.log('ONNX Runtime providers detected:', availableProviders);
-  } catch (error) {
-    console.warn('Could not detect GPU capabilities:', error);
-  }
+  // No longer using ONNX Runtime - Python Whisper handles GPU detection
+  console.log('Using Python faster-whisper for speech recognition');
+  hasGpu = false; // Will be determined by Python service
+  gpuProvider = 'Python faster-whisper';
   
   return {
     platform: os.platform(),
@@ -146,47 +114,22 @@ ipcMain.handle('get-system-info', async () => {
   };
 });
 
-// Recording handlers
+// Recording handlers - simplified since audio recording is handled in renderer
 ipcMain.handle('start-recording', async () => {
   console.log('Starting recording...');
-  if (isRecording) {
-    throw new Error('Recording already in progress');
-  }
-  
   isRecording = true;
-  
-  // TODO: Implement actual audio capture and STT
-  // For now, return mock success
   return { 
     success: true, 
-    message: 'Recording started (mock implementation)' 
+    message: 'Recording started' 
   };
 });
 
 ipcMain.handle('stop-recording', async () => {
   console.log('Stopping recording...');
-  if (!isRecording) {
-    throw new Error('No recording in progress');
-  }
-  
   isRecording = false;
-  
-  // TODO: Implement actual STT processing
-  // For now, return mock transcription
-  const mockTranscriptions = [
-    "Hello, this is a test of the MVP Echo transcription system.",
-    "The quick brown fox jumps over the lazy dog.",
-    "MVP Echo is working great with real-time transcription.",
-    "This is a demonstration of voice to text conversion.",
-    "The application is running smoothly on Windows 11."
-  ];
-  
-  const transcription = mockTranscriptions[Math.floor(Math.random() * mockTranscriptions.length)];
-  
   return { 
     success: true, 
-    transcription,
-    message: 'Recording stopped (mock transcription)' 
+    message: 'Recording stopped' 
   };
 });
 
