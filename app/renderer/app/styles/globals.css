@@ -5,51 +5,51 @@
 @layer base {
   :root {
     /* MVP Scale light theme - clean whites and grays */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(0.98 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
+    --background: 0 0% 100%;
+    --foreground: 0 0% 14.5%;
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 14.5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 14.5%;
     /* MVP Scale bright electric blue primary color */
-    --primary: oklch(0.55 0.25 264);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.95 0 0);
-    --secondary-foreground: oklch(0.145 0 0);
-    --muted: oklch(0.95 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.95 0 0);
-    --accent-foreground: oklch(0.145 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.9 0 0);
-    --input: oklch(0.95 0 0);
-    --ring: oklch(0.55 0.25 264);
+    --primary: 227 100% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 95%;
+    --secondary-foreground: 0 0% 14.5%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 55.6%;
+    --accent: 0 0% 95%;
+    --accent-foreground: 0 0% 14.5%;
+    --destructive: 0 84% 57.7%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 95%;
+    --ring: 227 100% 55%;
     --radius: 0.75rem;
   }
 
   .dark {
     /* MVP Scale exact dark theme - very dark navy background with bright blue accents */
-    --background: oklch(0.08 0.02 264);
-    --foreground: oklch(0.98 0 0);
-    --card: oklch(0.12 0.02 264);
-    --card-foreground: oklch(0.98 0 0);
-    --popover: oklch(0.12 0.02 264);
-    --popover-foreground: oklch(0.98 0 0);
+    --background: 228 20% 8%;
+    --foreground: 0 0% 98%;
+    --card: 228 20% 12%;
+    --card-foreground: 0 0% 98%;
+    --popover: 228 20% 12%;
+    --popover-foreground: 0 0% 98%;
     /* Bright electric blue matching MVP Scale exactly */
-    --primary: oklch(0.65 0.25 264);
-    --primary-foreground: oklch(0.08 0.02 264);
-    --secondary: oklch(0.18 0.02 264);
-    --secondary-foreground: oklch(0.98 0 0);
-    --muted: oklch(0.15 0.02 264);
-    --muted-foreground: oklch(0.65 0 0);
-    --accent: oklch(0.18 0.02 264);
-    --accent-foreground: oklch(0.98 0 0);
-    --destructive: oklch(0.55 0.25 15);
-    --destructive-foreground: oklch(0.98 0 0);
-    --border: oklch(0.18 0.02 264);
-    --input: oklch(0.15 0.02 264);
-    --ring: oklch(0.65 0.25 264);
+    --primary: 227 100% 65%;
+    --primary-foreground: 228 20% 8%;
+    --secondary: 228 20% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 228 20% 15%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 228 20% 18%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 15 100% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 228 20% 18%;
+    --input: 228 20% 15%;
+    --ring: 227 100% 65%;
   }
 
   * {
@@ -136,4 +136,62 @@
 
 .dark .mvp-button-secondary:hover {
   @apply bg-slate-500;
+}
+
+/* Window Controls Overlay Support - Modern Windows 11 styling */
+:root {
+  --fallback-title-bar-height: 40px;
+}
+
+/* Drag regions for custom title bar */
+.draggable {
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+.non-draggable {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+/* Title bar layout for Window Controls Overlay */
+.title-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(titlebar-area-height, var(--fallback-title-bar-height));
+  width: 100%;
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.title-bar-content {
+  position: absolute;
+  top: 0;
+  left: env(titlebar-area-x, 0);
+  width: env(titlebar-area-width, 100%);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+}
+
+/* Main content offset for title bar */
+.main-content {
+  padding-top: env(titlebar-area-height, var(--fallback-title-bar-height));
+}
+
+/* Dark mode title bar */
+.dark .title-bar {
+  background: rgba(30, 32, 47, 0.85);
+}
+
+/* Windows 11 style - subtle transparency and blur effects */
+@supports (backdrop-filter: blur(20px)) {
+  .title-bar {
+    backdrop-filter: blur(20px) saturate(180%);
+  }
 }

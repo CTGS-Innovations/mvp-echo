@@ -5,10 +5,24 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ws://localhost:* http://localhost:*;" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MVP-Echo</title>
+    <title>MVP-Echo - Voice to Text</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/app/main.tsx"></script>
+    <div id="root">
+      <!-- Fallback content while React loads -->
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: system-ui;">
+        <div style="text-align: center;">
+          <h1 style="color: #4285f4; margin-bottom: 16px;">MVP-Echo</h1>
+          <p style="color: #666;">Loading application...</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/app/main.tsx" onerror="console.error('Failed to load main.tsx')"></script>
+    <script>
+      // Debug: Log when HTML is fully loaded
+      document.addEventListener('DOMContentLoaded', () => {
+        console.log('MVP-Echo: HTML DOM loaded');
+      });
+    </script>
   </body>
 </html>

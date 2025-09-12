@@ -15,8 +15,23 @@ function createWindow() {
       sandbox: false,
       preload: path.join(__dirname, '../preload/preload.js'),
     },
-    titleBarStyle: 'default',
+    // Modern Windows 11 styling
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#ffffff',        // Clean white background matching MVP Scale
+      symbolColor: '#6b7280',  // Gray window controls 
+      height: 40
+    },
+    title: 'MVP-Echo',
+    backgroundMaterial: 'mica',
+    roundedCorners: true,
+    // Window transparency effects
     show: false,
+    // Additional modern window options
+    autoHideMenuBar: true,
+    // Enable modern window frame
+    frame: true,
+    thickFrame: true,
   });
 
   // Load the React app

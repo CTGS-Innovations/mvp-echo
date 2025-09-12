@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
+  console.log('MVP-Echo: App component rendered');
+  
+  // Debug: Log when component mounts
+  useEffect(() => {
+    console.log('MVP-Echo: App component mounted successfully');
+  }, []);
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
@@ -70,18 +76,28 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="border-b border-border p-6 bg-background">
-        <div className="container max-w-4xl mx-auto flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-primary">MVP-Echo</h1>
-          <div className="text-sm text-muted-foreground">
-            Voice-to-Text Transcription
+      {/* Modern Windows 11 Title Bar with native controls */}
+      <div className="title-bar draggable">
+        <div className="title-bar-content">
+          <div className="flex items-center gap-3 non-draggable">
+            <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-primary-foreground">
+                <path d="M12 1L3 7V10C3 16 9 21 12 22C15 21 21 16 21 10V7L12 1Z" stroke="currentColor" strokeWidth="2" fill="currentColor" strokeLinejoin="round"/>
+                <path d="M12 8V16" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M8 12L16 12" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <h1 className="text-sm font-semibold text-foreground">MVP-Echo</h1>
+          </div>
+          <div className="flex-1 text-center">
+            <span className="text-xs text-muted-foreground">Voice-to-Text Transcription</span>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <main className="container max-w-4xl mx-auto p-6 space-y-6">
+      {/* Main Content with title bar offset */}
+      <div className="main-content">
+        <main className="container max-w-4xl mx-auto p-6 space-y-6">
         {/* Recording Card */}
         <div className="mvp-card p-6">
           <div className="space-y-6">
@@ -204,25 +220,26 @@ export default function App() {
             </div>
           </div>
         </div>
-      </main>
+        </main>
 
-      {/* Status Bar */}
-      <footer className="border-t border-border bg-muted/30 p-4 mt-8">
-        <div className="container max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center gap-4">
-            <span className="font-medium">MVP-Echo v1.0.0</span>
-            <span className="opacity-50">•</span>
-            <span>Engine: <span className="text-foreground">CPU Mode</span></span>
-            <span className="opacity-50">•</span>
-            <span>Platform: <span className="text-foreground">Windows 11</span></span>
+        {/* Status Bar */}
+        <footer className="border-t border-border bg-muted/30 p-4 mt-8">
+          <div className="container max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <span className="font-medium">MVP-Echo v1.0.0</span>
+              <span className="opacity-50">•</span>
+              <span>Engine: <span className="text-foreground">CPU Mode</span></span>
+              <span className="opacity-50">•</span>
+              <span>Platform: <span className="text-foreground">Windows 11</span></span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-foreground font-medium">Ready</span>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-foreground font-medium">Ready</span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }
