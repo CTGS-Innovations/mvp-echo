@@ -61,7 +61,28 @@ class WhisperEngine {
       return; // Already running
     }
 
-    const pythonScript = path.join(__dirname, '../../python/whisper_service.py');
+    // Check multiple possible locations for the Python script
+    const possiblePaths = [
+      path.join(__dirname, '../../python/whisper_service.py'),
+      path.join(process.resourcesPath, 'python/whisper_service.py'),
+      path.join(process.cwd(), 'python/whisper_service.py'),
+      path.join(__dirname, '../../../python/whisper_service.py')
+    ];
+
+    let pythonScript = null;
+    for (const scriptPath of possiblePaths) {
+      console.log(`🔍 Checking for Python script at: ${scriptPath}`);
+      if (fs.existsSync(scriptPath)) {
+        pythonScript = scriptPath;
+        console.log(`✅ Found Python script at: ${scriptPath}`);
+        break;
+      }
+    }
+
+    if (!pythonScript) {
+      console.error('❌ Python script not found in any of these locations:', possiblePaths);
+      throw new Error('Python Whisper service script not found');
+    }
     
     console.log(`🐍 Starting Python Whisper service: ${pythonScript}`);
     

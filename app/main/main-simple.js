@@ -1,14 +1,38 @@
 const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 const { whisperEngine } = require('../stt/whisper-engine');
+
+// File logging setup
+const logPath = path.join(os.tmpdir(), 'mvp-echo-debug.log');
+
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  console.log(message);
+  try {
+    fs.appendFileSync(logPath, logMessage);
+  } catch (err) {
+    console.error('Failed to write to log file:', err);
+  }
+}
+
+// Log startup info
+log(`MVP-Echo: Starting application, log file: ${logPath}`);
+log(`MVP-Echo: __dirname = ${__dirname}`);
+log(`MVP-Echo: process.cwd() = ${process.cwd()}`);
+log(`MVP-Echo: NODE_ENV = ${process.env.NODE_ENV}`);
+log(`MVP-Echo: Platform: ${os.platform()}, Arch: ${os.arch()}`);
+log(`MVP-Echo: App path: ${app.getAppPath()}`);
+log(`MVP-Echo: User data path: ${app.getPath('userData')}`);
 
 let mainWindow;
 let isRecording = false;
 
 function createWindow() {
   const preloadPath = path.resolve(__dirname, '../preload/preload.js');
-  console.log('MVP-Echo: Preload script path:', preloadPath);
+  log('MVP-Echo: Preload script path: ' + preloadPath);
   
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -41,14 +65,17 @@ function createWindow() {
   });
 
   // Load the React app
-  console.log('MVP-Echo: NODE_ENV =', process.env.NODE_ENV);
+  log('MVP-Echo: NODE_ENV = ' + process.env.NODE_ENV);
   if (process.env.NODE_ENV === 'development') {
-    console.log('MVP-Echo: Loading from Vite dev server at http://localhost:5173');
+    log('MVP-Echo: Loading from Vite dev server at http://localhost:5173');
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    console.log('MVP-Echo: Loading from local file system');
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+    log('MVP-Echo: Loading from local file system');
+    const htmlPath = path.join(__dirname, '../../dist/renderer/index.html');
+    log('MVP-Echo: HTML file path: ' + htmlPath);
+    log('MVP-Echo: HTML file exists: ' + fs.existsSync(htmlPath));
+    mainWindow.loadFile(htmlPath);
   }
 
   mainWindow.once('ready-to-show', () => {
@@ -65,25 +92,25 @@ app.whenReady().then(() => {
   
   // Register global shortcut for Ctrl+Alt+Z - simple toggle for now
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
-    console.log('Global Ctrl+Alt+Z pressed');
+    log('Global Ctrl+Alt+Z pressed');
     
     if (!isRecording) {
       // Start recording
-      console.log('Starting recording via global shortcut');
+      log('Starting recording via global shortcut');
       isRecording = true;
       mainWindow.webContents.send('global-shortcut-start-recording');
     } else {
       // Stop recording
-      console.log('Stopping recording via global shortcut');
+      log('Stopping recording via global shortcut');
       isRecording = false;
       mainWindow.webContents.send('global-shortcut-stop-recording');
     }
   });
 
   if (!ret) {
-    console.log('Global shortcut registration failed');
+    log('Global shortcut registration failed');
   } else {
-    console.log('Global shortcut Ctrl+Alt+Z registered successfully');
+    log('Global shortcut Ctrl+Alt+Z registered successfully');
   }
 });
 
@@ -103,7 +130,7 @@ app.on('before-quit', async () => {
   try {
     await whisperEngine.cleanup();
   } catch (error) {
-    console.error('Error during app cleanup:', error);
+    log('Error during app cleanup: ' + error.message);
   }
 });
 
@@ -127,7 +154,7 @@ ipcMain.handle('get-system-info', async () => {
   let gpuProvider = 'CPU';
   
   // No longer using ONNX Runtime - Python Whisper handles GPU detection
-  console.log('Using Python faster-whisper for speech recognition');
+  log('Using Python faster-whisper for speech recognition');
   hasGpu = false; // Will be determined by Python service
   gpuProvider = 'Python faster-whisper';
   
@@ -146,7 +173,7 @@ ipcMain.handle('get-system-info', async () => {
 
 // Recording handlers - simplified since audio recording is handled in renderer
 ipcMain.handle('start-recording', async () => {
-  console.log('Starting recording...');
+  log('Starting recording...');
   isRecording = true;
   return { 
     success: true, 
@@ -155,7 +182,7 @@ ipcMain.handle('start-recording', async () => {
 });
 
 ipcMain.handle('stop-recording', async () => {
-  console.log('Stopping recording...');
+  log('Stopping recording...');
   isRecording = false;
   return { 
     success: true, 
@@ -172,24 +199,24 @@ ipcMain.handle('copy-to-clipboard', async (event, text) => {
 
 // Process audio with STT
 ipcMain.handle('processAudio', async (event, audioArray) => {
-  console.log('🎤 Processing audio array of length:', audioArray.length);
+  log('🎤 Processing audio array of length: ' + audioArray.length);
   
   try {
     // Initialize Whisper engine if not already done
     if (!whisperEngine.getStatus().initialized) {
-      console.log('🔧 Initializing Whisper engine...');
+      log('🔧 Initializing Whisper engine...');
       await whisperEngine.initialize('tiny'); // Start with tiny model for speed
     }
     
     // Process audio with real Whisper engine
     const result = await whisperEngine.transcribe(audioArray);
     
-    console.log('✅ Whisper transcription result:', result);
+    log('✅ Whisper transcription result: ' + JSON.stringify(result));
     
     return result;
     
   } catch (error) {
-    console.error('❌ Whisper processing failed:', error);
+    log('❌ Whisper processing failed: ' + error.message);
     
     // Fallback to mock behavior if Whisper fails
     const mockTranscriptions = [
