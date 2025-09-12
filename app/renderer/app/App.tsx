@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useReducer } from 'react';
 import OceanVisualizer from './components/OceanVisualizer';
 
 // Audio recording functionality (renderer process)
@@ -141,15 +141,87 @@ export default function App() {
     };
   }, []);
   
+
+  const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
+  
+  // Sync ref when state changes
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
   const [transcription, setTranscription] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [systemInfo, setSystemInfo] = useState<any>(null);
   const [processingStatus, setProcessingStatus] = useState('');
-  
   const audioCapture = useRef(new AudioCapture());
-  const isProcessing = useRef(false); // Guard against duplicate operations
+  const isRecordingRef = useRef(false);
+
+
+  const handleStartRecording = useCallback(async (source = 'unknown') => {
+    if (isRecording) return; // Simple state check
+    
+    console.log(`🎤 Starting recording from: ${source}`);
+    setIsRecording(true); // Update state immediately
+    setTranscription('');
+    setProcessingStatus('Starting...');
+    
+    try {
+      await audioCapture.current.startRecording(setAudioLevel);
+      setProcessingStatus('Recording...');
+      await (window as any).electronAPI.startRecording(source);
+    } catch (error) {
+      console.error('Start recording failed:', error);
+      setIsRecording(false);
+      setProcessingStatus('Failed to start');
+    }
+  }, [isRecording]);
+
+  const handleStopRecording = useCallback(async (source = 'unknown') => {
+    if (!isRecording) return; // Simple state check
+    
+    console.log(`🛑 Stopping recording from: ${source}`);
+    setProcessingStatus('Processing...');
+    
+    try {
+      const audioBuffer = await audioCapture.current.stopRecording();
+      setIsRecording(false); // Update state immediately
+      setAudioLevel(0);
+      
+      await (window as any).electronAPI.stopRecording(source);
+      
+      if (audioBuffer.byteLength > 0) {
+        const audioArray = Array.from(new Uint8Array(audioBuffer));
+        const result = await (window as any).electronAPI.processAudio(audioArray);
+        
+        setTranscription(result.text);
+        setProcessingStatus(`Completed (${result.engine})`);
+        
+        if (result.text?.trim()) {
+          try {
+            await navigator.clipboard.writeText(result.text);
+            setProcessingStatus('Completed - Copied to clipboard!');
+          } catch (e) {
+            console.warn('Clipboard failed:', e);
+          }
+        }
+      } else {
+        setTranscription('');
+        setProcessingStatus('No audio recorded');
+      }
+    } catch (error) {
+      console.error('Stop recording failed:', error);
+      setIsRecording(false);
+      setProcessingStatus('Processing failed');
+    }
+  }, [isRecording]);
+
+  const handleRecordingToggle = useCallback((source = 'unknown') => {
+    console.log(`🔄 Toggle from ${source}, current state: ${isRecording}`);
+    if (isRecording) {
+      handleStopRecording(source);
+    } else {
+      handleStartRecording(source);
+    }
+  }, [isRecording, handleStartRecording, handleStopRecording]);
 
   // Fetch system info on mount
   useEffect(() => {
@@ -168,156 +240,85 @@ export default function App() {
 
   // Audio level is now handled by the real-time AudioCapture callback
 
-  // Global shortcut event listeners
+  // Global shortcut event listener - register only once on mount
   useEffect(() => {
     if (isElectron) {
-      // Listen for global shortcut events from main process
-      (window as any).electronAPI.onGlobalShortcutStartRecording(() => {
-        console.log('Global shortcut: Start recording');
-        // Access current state through a function to avoid stale closures
-        setIsRecording(currentRecording => {
-          if (!currentRecording) {
-            // Trigger start recording
-            setTimeout(() => handleStartRecording('global-shortcut'), 0);
-          }
-          return currentRecording;
-        });
+      console.log('🔧 Setting up global shortcut listener (mount only)');
+      
+      // Listen for global shortcut toggle event from main process
+      const unsubscribe = (window as any).electronAPI.onGlobalShortcutToggle(() => {
+        console.log('🌐 Global shortcut toggle event received');
+        
+        // Use ref for synchronous state check to prevent race conditions
+        const currentlyRecording = isRecordingRef.current;
+        console.log(`🔄 Global shortcut toggle, current state: ${currentlyRecording}`);
+        
+        // Prevent duplicate execution by checking ref state
+        if (currentlyRecording) {
+          // Stop recording
+          console.log('🛑 Stopping recording from: global-shortcut');
+          isRecordingRef.current = false;
+          setIsRecording(false);
+          setProcessingStatus('Processing...');
+          setAudioLevel(0);
+          
+          audioCapture.current.stopRecording().then(audioBuffer => {
+            (window as any).electronAPI.stopRecording('global-shortcut');
+            
+            if (audioBuffer.byteLength > 0) {
+              const audioArray = Array.from(new Uint8Array(audioBuffer));
+              (window as any).electronAPI.processAudio(audioArray).then(result => {
+                setTranscription(result.text);
+                setProcessingStatus(`Completed (${result.engine})`);
+                
+                if (result.text?.trim()) {
+                  navigator.clipboard.writeText(result.text).then(() => {
+                    setProcessingStatus('Completed - Copied to clipboard!');
+                  }).catch(e => console.warn('Clipboard failed:', e));
+                }
+              });
+            } else {
+              setTranscription('');
+              setProcessingStatus('No audio recorded');
+            }
+          }).catch(error => {
+            console.error('Stop recording failed:', error);
+            setProcessingStatus('Processing failed');
+          });
+        } else {
+          // Start recording
+          console.log('🎤 Starting recording from: global-shortcut');
+          isRecordingRef.current = true;
+          setIsRecording(true);
+          setTranscription('');
+          setProcessingStatus('Starting...');
+          
+          audioCapture.current.startRecording(setAudioLevel).then(() => {
+            setProcessingStatus('Recording...');
+            (window as any).electronAPI.startRecording('global-shortcut');
+          }).catch(error => {
+            console.error('Start recording failed:', error);
+            isRecordingRef.current = false;
+            setIsRecording(false);
+            setProcessingStatus('Failed to start');
+          });
+        }
       });
-
-      (window as any).electronAPI.onGlobalShortcutStopRecording(() => {
-        console.log('Global shortcut: Stop recording');
-        // Access current state through a function to avoid stale closures
-        setIsRecording(currentRecording => {
-          if (currentRecording) {
-            // Trigger stop recording
-            setTimeout(() => handleStopRecording('global-shortcut'), 0);
-          }
-          return currentRecording;
-        });
-      });
+      
+      // Cleanup function to remove listener
+      return () => {
+        console.log('🔧 Cleaning up global shortcut listener (unmount only)');
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
     }
-  }, [isElectron]); // Only depend on isElectron since we're using state updater functions
+  }, [isElectron]); // Only depend on isElectron, not changing functions
 
-  useEffect(() => {
-    // Duration counter
-    let durationInterval: NodeJS.Timeout;
-    if (isRecording) {
-      durationInterval = setInterval(() => {
-        setDuration(prev => prev + 1);
-      }, 1000);
-    } else {
-      setDuration(0);
-    }
-    
-    return () => {
-      if (durationInterval) clearInterval(durationInterval);
-    };
-  }, [isRecording]);
 
   // Note: Local keyboard shortcuts removed - using global shortcuts from main process instead
   // This prevents conflicts between global and local handlers
 
-  const handleStartRecording = async (source = 'unknown') => {
-    console.log(`🎤 handleStartRecording called from: ${source}`);
-    
-    // Prevent duplicate starts
-    if (isProcessing.current || isRecording) {
-      console.log(`⚠️ Recording already in progress, ignoring start request from: ${source}`);
-      return;
-    }
-    
-    isProcessing.current = true;
-    
-    try {
-      console.log(`✅ Starting recording initiated by: ${source}`);
-      setIsRecording(true);
-      setTranscription('');
-      setProcessingStatus('Starting recording...');
-      
-      // Pass the audio level callback to the AudioCapture
-      await audioCapture.current.startRecording((level: number) => {
-        setAudioLevel(level);
-      });
-      
-      setProcessingStatus('Recording in progress...');
-      
-      // Call IPC to notify main process
-      await (window as any).electronAPI.startRecording(source);
-      
-    } catch (error) {
-      console.error(`❌ Failed to start recording from ${source}:`, error);
-      setIsRecording(false);
-      setProcessingStatus('Failed to start recording');
-    } finally {
-      isProcessing.current = false;
-    }
-  };
-
-  const handleStopRecording = async (source = 'unknown') => {
-    console.log(`🛑 handleStopRecording called from: ${source}`);
-    
-    // Prevent duplicate stops
-    if (isProcessing.current || !isRecording) {
-      console.log(`⚠️ Not recording or already processing, ignoring stop request from: ${source}`);
-      return;
-    }
-    
-    isProcessing.current = true;
-    
-    try {
-      console.log(`✅ Stopping recording initiated by: ${source}`);
-      setProcessingStatus('Stopping recording...');
-      
-      // Stop audio capture and get the recorded data
-      const audioBuffer = await audioCapture.current.stopRecording();
-      
-      // Call IPC to notify main process
-      await (window as any).electronAPI.stopRecording(source);
-      
-      if (audioBuffer.byteLength > 0) {
-        setProcessingStatus('Processing audio with ONNX Runtime...');
-        
-        // Convert ArrayBuffer to a format we can send over IPC
-        const audioArray = Array.from(new Uint8Array(audioBuffer));
-        
-        // Process audio with STT engine
-        const result = await (window as any).electronAPI.processAudio(audioArray);
-        
-        setTranscription(result.text);
-        setProcessingStatus(`Completed in ${result.processingTime || 'N/A'}ms (${result.engine})`);
-        
-        // Copy to clipboard automatically
-        if (result.text && result.text.trim()) {
-          try {
-            await navigator.clipboard.writeText(result.text);
-            setProcessingStatus(`Completed - Copied to clipboard! (${result.processingTime || 'N/A'}ms)`);
-          } catch (clipboardError) {
-            console.warn('Failed to copy to clipboard:', clipboardError);
-          }
-        }
-        
-        console.log(`📝 Transcription result from ${source}:`, result);
-      } else {
-        console.log(`❌ No audio recorded from ${source}`);
-        setProcessingStatus('No audio recorded');
-      }
-      
-    } catch (error) {
-      console.error(`❌ Failed to process recording from ${source}:`, error);
-      setProcessingStatus('Processing failed');
-      setTranscription('Error: Failed to process audio');
-    } finally {
-      setIsRecording(false);
-      setAudioLevel(0);
-      isProcessing.current = false;
-    }
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
 
   return (
@@ -394,7 +395,7 @@ export default function App() {
           {/* Microphone Button - Bottom Right of Visualizer */}
           <div className="absolute bottom-4 right-4">
             <button
-              onClick={isRecording ? () => handleStopRecording('button-click') : () => handleStartRecording('button-click')}
+              onClick={() => handleRecordingToggle('button-click')}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 opacity-60 hover:opacity-100 ${
                 isRecording 
                   ? 'bg-red-500/80 hover:bg-red-500 text-white shadow-md shadow-red-500/20' 
@@ -438,7 +439,7 @@ export default function App() {
                     {isRecording 
                       ? "🎤 Listening and processing your speech..." 
                       : isElectron 
-                        ? "Hold Ctrl+Alt+Z to record (or click microphone button)"
+                        ? "Press Up arrow to record (or click microphone button)"
                         : "Click microphone button to record"
                     }
                   </p>

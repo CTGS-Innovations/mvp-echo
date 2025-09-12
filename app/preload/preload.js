@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
   
   // Global shortcut event listeners
-  onGlobalShortcutStartRecording: (callback) => ipcRenderer.on('global-shortcut-start-recording', callback),
-  onGlobalShortcutStopRecording: (callback) => ipcRenderer.on('global-shortcut-stop-recording', callback),
+  onGlobalShortcutToggle: (callback) => {
+    // Remove any existing listeners to prevent accumulation
+    ipcRenderer.removeAllListeners('global-shortcut-toggle');
+    return ipcRenderer.on('global-shortcut-toggle', callback);
+  },
 });

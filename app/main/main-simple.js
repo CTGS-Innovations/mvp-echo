@@ -28,8 +28,7 @@ log(`MVP-Echo: App path: ${app.getAppPath()}`);
 log(`MVP-Echo: User data path: ${app.getPath('userData')}`);
 
 let mainWindow;
-let isRecording = false;
-let lastShortcutTime = 0;
+let shortcutActive = false;
 
 function createWindow() {
   const preloadPath = path.resolve(__dirname, '../preload/preload.js');
@@ -91,30 +90,25 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   
-  // Register global shortcut for Ctrl+Alt+Z - simple toggle for now
+  // Register global shortcut for Ctrl+Alt+Z - toggle recording
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
-    const now = Date.now();
-    
-    // Debounce: ignore if called within 500ms of last call
-    if (now - lastShortcutTime < 500) {
-      log('⚠️ Global shortcut ignored (debounced)');
+    // Aggressive debounce to prevent hardware key repeat issues
+    if (shortcutActive) {
+      log('⚠️ Global shortcut ignored (debounce active)');
       return;
     }
-    lastShortcutTime = now;
     
-    log('🔥 Global Ctrl+Alt+Z pressed');
+    shortcutActive = true;
+    log('🔥 Global Ctrl+Alt+Z detected - sending single toggle event');
     
-    if (!isRecording) {
-      // Start recording via global shortcut
-      log('🎤 Recording started via: global-shortcut');
-      isRecording = true;
-      mainWindow.webContents.send('global-shortcut-start-recording');
-    } else {
-      // Stop recording via global shortcut  
-      log('🛑 Recording stopped via: global-shortcut');
-      isRecording = false;
-      mainWindow.webContents.send('global-shortcut-stop-recording');
-    }
+    // Send toggle command to renderer - renderer's event system handles state logic
+    mainWindow.webContents.send('global-shortcut-toggle');
+    
+    // Longer debounce to prevent multiple key combination detections
+    setTimeout(() => {
+      shortcutActive = false;
+      log('🔄 Global shortcut debounce reset');
+    }, 500);
   });
 
   if (!ret) {
@@ -184,7 +178,6 @@ ipcMain.handle('get-system-info', async () => {
 // Recording handlers - simplified since audio recording is handled in renderer
 ipcMain.handle('start-recording', async (event, source = 'unknown') => {
   log(`🎤 Recording started via: ${source}`);
-  isRecording = true;
   return { 
     success: true, 
     message: `Recording started via ${source}` 
@@ -193,7 +186,6 @@ ipcMain.handle('start-recording', async (event, source = 'unknown') => {
 
 ipcMain.handle('stop-recording', async (event, source = 'unknown') => {
   log(`🛑 Recording stopped via: ${source}`);
-  isRecording = false;
   return { 
     success: true, 
     message: `Recording stopped via ${source}` 

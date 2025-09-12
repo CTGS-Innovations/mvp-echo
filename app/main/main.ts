@@ -3,6 +3,7 @@ import * as path from 'path';
 
 let mainWindow: BrowserWindow;
 let isRecording = false;
+let recordingStateLock = false;  // Prevent concurrent state changes
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -37,16 +38,48 @@ function createWindow() {
 }
 
 // IPC Handlers for MVP
-ipcMain.handle('start-recording', async () => {
-  console.log('Recording started');
-  isRecording = true;
-  return { success: true, message: 'Recording started' };
+ipcMain.handle('start-recording', async (event, source = 'ipc') => {
+  // Acquire lock to prevent concurrent operations
+  if (recordingStateLock) {
+    console.log(`⚠️ Recording operation in progress, ignoring start from: ${source}`);
+    return { success: false, message: 'Recording operation in progress' };
+  }
+  
+  if (isRecording) {
+    console.log(`⚠️ Already recording, ignoring start from: ${source}`);
+    return { success: false, message: 'Already recording' };
+  }
+  
+  recordingStateLock = true;
+  try {
+    console.log(`✅ Recording started from: ${source}`);
+    isRecording = true;
+    return { success: true, message: 'Recording started' };
+  } finally {
+    recordingStateLock = false;
+  }
 });
 
-ipcMain.handle('stop-recording', async () => {
-  console.log('Recording stopped');
-  isRecording = false;
-  return { success: true, message: 'Recording stopped' };
+ipcMain.handle('stop-recording', async (event, source = 'ipc') => {
+  // Acquire lock to prevent concurrent operations
+  if (recordingStateLock) {
+    console.log(`⚠️ Recording operation in progress, ignoring stop from: ${source}`);
+    return { success: false, message: 'Recording operation in progress' };
+  }
+  
+  if (!isRecording) {
+    console.log(`⚠️ Not recording, ignoring stop from: ${source}`);
+    return { success: false, message: 'Not recording' };
+  }
+  
+  recordingStateLock = true;
+  try {
+    console.log(`✅ Recording stopped from: ${source}`);
+    isRecording = false;
+    return { success: true, message: 'Recording stopped' };
+  } finally {
+    recordingStateLock = false;
+  }
 });
 
 ipcMain.handle('get-system-info', async () => {
@@ -204,15 +237,29 @@ app.whenReady().then(() => {
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
     console.log('Global Ctrl+Alt+Z pressed');
     
-    // Toggle recording state and notify renderer
-    if (!isRecording) {
-      // Start recording
-      isRecording = true;
-      mainWindow.webContents.send('global-shortcut-start-recording');
-    } else {
-      // Stop recording  
-      isRecording = false;
-      mainWindow.webContents.send('global-shortcut-stop-recording');
+    // Use proper state locking to prevent concurrent operations
+    if (recordingStateLock) {
+      console.log('⚠️ Recording operation in progress, ignoring global shortcut');
+      return;
+    }
+    
+    // Acquire lock and toggle state safely
+    recordingStateLock = true;
+    try {
+      if (!isRecording) {
+        console.log('✅ Starting recording from global shortcut');
+        isRecording = true;
+        mainWindow.webContents.send('global-shortcut-start-recording');
+      } else {
+        console.log('✅ Stopping recording from global shortcut');
+        isRecording = false;
+        mainWindow.webContents.send('global-shortcut-stop-recording');
+      }
+    } finally {
+      // Release lock after a short delay to prevent rapid toggles
+      setTimeout(() => {
+        recordingStateLock = false;
+      }, 100);
     }
   });
 
