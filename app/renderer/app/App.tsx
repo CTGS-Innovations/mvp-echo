@@ -167,6 +167,7 @@ export default function App() {
   const [processingStatus, setProcessingStatus] = useState('');
   const [privacyMode, setPrivacyMode] = useState(false);
   const [privacyReminder, setPrivacyReminder] = useState(false);
+  const [lastProcessingTime, setLastProcessingTime] = useState<number | null>(null);
   const audioCapture = useRef(new AudioCapture());
   const isRecordingRef = useRef(false);
   const privacyModeRef = useRef(false);
@@ -219,6 +220,7 @@ export default function App() {
         
         setTranscription(result.text);
         setProcessingStatus(`Completed (${result.engine})`);
+        setLastProcessingTime(result.processingTime);
         
         if (result.text?.trim()) {
           try {
@@ -289,6 +291,11 @@ export default function App() {
           return;
         }
         
+        // Always bring window to foreground when global shortcut is used
+        (window as any).electronAPI.bringToForeground().catch(err => 
+          console.warn('Failed to bring window to foreground:', err)
+        );
+        
         // Use ref for synchronous state check to prevent race conditions
         const currentlyRecording = isRecordingRef.current;
         console.log(`🔄 Global shortcut toggle, current state: ${currentlyRecording}`);
@@ -310,6 +317,7 @@ export default function App() {
               (window as any).electronAPI.processAudio(audioArray).then(result => {
                 setTranscription(result.text);
                 setProcessingStatus(`Completed (${result.engine})`);
+                setLastProcessingTime(result.processingTime);
                 
                 if (result.text?.trim()) {
                   (window as any).electronAPI.copyToClipboard(result.text).then(() => {
@@ -378,64 +386,9 @@ export default function App() {
             </div>
             <h1 className="text-sm font-semibold text-foreground">MVP-Echo</h1>
           </div>
-          <div className="flex-1 flex items-center justify-center gap-4 text-xs text-muted-foreground">
-            <span className="font-medium">v1.0.0</span>
-            <span className="opacity-50">•</span>
-            <span>{systemInfo?.gpuAvailable ? `${systemInfo.gpuMode} Mode` : 'CPU Mode'}</span>
-            <span className="opacity-50">•</span>
-            <span>{systemInfo?.whisperModel || 'Model loading...'}</span>
-            <span className="opacity-50">•</span>
-            <div className="flex items-center gap-3">
-              {/* Status Indicator */}
-              <div className="flex items-center gap-2">
-                {privacyMode ? (
-                  <>
-                    <div className={`w-2 h-2 rounded-full ${privacyReminder ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                    <span className={`font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>
-                      🔒 Privacy Mode
-                    </span>
-                  </>
-                ) : isRecording ? (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                    <span className="text-red-500 font-medium">Recording</span>
-                  </>
-                ) : processingStatus === 'Processing...' ? (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                    <span className="text-yellow-600 font-medium">⏳ Releasing microphone...</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-green-600 font-medium">Ready</span>
-                  </>
-                )}
-              </div>
-              
-              {/* Privacy Mode Toggle Button */}
-              <button
-                onClick={() => {
-                  console.log('Privacy button clicked, current state:', privacyMode);
-                  setPrivacyMode(!privacyMode);
-                  console.log('Setting privacy mode to:', !privacyMode);
-                }}
-                className={`non-draggable px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer border ${
-                  privacyMode 
-                    ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/40 border-orange-500/30' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 border-transparent hover:border-slate-300'
-                }`}
-                style={{ pointerEvents: 'auto' }}
-                title={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
-                onMouseEnter={() => console.log('Privacy button hover enter')}
-                onMouseLeave={() => console.log('Privacy button hover leave')}
-              >
-                Privacy
-              </button>
-            </div>
-          </div>
         </div>
       </div>
+
 
       {/* Browser Warning */}
       {!isElectron && (
@@ -455,11 +408,11 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content with title bar offset */}
-      <div className="main-content">
-        <main className="container max-w-4xl mx-auto p-6 space-y-6">
-        {/* Ocean Audio Visualizer with Microphone Control */}
-        <div className="relative">
+      {/* Main Content with flex layout */}
+      <div className="flex-1 flex flex-col">
+        <main className="flex-1 container max-w-4xl mx-auto p-4 flex flex-col space-y-4">
+        {/* Ocean Audio Visualizer with Microphone Control - Larger */}
+        <div className="relative flex-1 min-h-[250px]">
           <OceanVisualizer isRecording={isRecording} audioLevel={audioLevel} />
           
           {/* Microphone Button - Bottom Right of Visualizer */}
@@ -490,20 +443,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Transcription Card */}
-        <div className="mvp-card p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Transcription</h2>
-              {(isRecording || processingStatus) && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                  {processingStatus || 'Processing...'}
-                </div>
-              )}
-            </div>
-            
-            <div className="min-h-[200px] p-6 bg-muted/50 rounded-lg border-2 border-dashed border-border">
+        {/* Content Area */}
+        <div className="h-[180px] p-4 bg-muted/50 rounded-lg border-2 border-dashed border-border overflow-y-auto">
               {privacyMode ? (
                 <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
                   <div className={`text-6xl ${privacyReminder ? 'animate-pulse' : ''}`}>🔒</div>
@@ -515,26 +456,135 @@ export default function App() {
                   </p>
                 </div>
               ) : transcription ? (
-                <p className="text-base leading-relaxed text-foreground">
-                  {transcription}
-                </p>
+                <div className="h-full w-full flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-base font-semibold text-foreground">Transcription</h3>
+                    <button
+                      onClick={() => {
+                        (window as any).electronAPI.copyToClipboard(transcription);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted/50"
+                      title="Copy to clipboard"
+                    >
+                      📋 Copy
+                    </button>
+                  </div>
+                  <div className="flex-1 relative">
+                    <div className="h-full w-full overflow-y-auto">
+                      <p className="text-sm leading-relaxed text-foreground m-0 p-0 w-full block">
+                        {transcription}
+                      </p>
+                    </div>
+                    {lastProcessingTime && (
+                      <div className="absolute -bottom-1 -right-1 text-[8px] text-muted-foreground opacity-80 font-mono bg-background/80 px-1 rounded-sm">
+                        {lastProcessingTime}ms
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-muted-foreground italic text-center">
-                    {isRecording 
-                      ? "🎤 Listening and processing your speech..." 
-                      : isElectron 
-                        ? "Press Ctrl+Alt+Z to record (or click microphone button)"
-                        : "Click microphone button to record"
-                    }
-                  </p>
+                <div className="flex flex-col items-center justify-center h-full space-y-4">
+                  {isRecording ? (
+                    <p className="text-muted-foreground italic text-center">
+                      🎤 Listening and processing your speech...
+                    </p>
+                  ) : isElectron ? (
+                    <div className="text-center space-y-3 max-w-md">
+                      <h3 className="text-lg font-semibold text-foreground">How to Use MVP-Echo</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="font-bold text-primary">Hold Ctrl+Alt</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-bold text-green-600">Tap Z</span>
+                          <span className="text-muted-foreground">to start recording</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="font-bold text-primary">Hold Ctrl+Alt</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-bold text-red-600">Tap Z</span>
+                          <span className="text-muted-foreground">to stop recording</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="font-bold text-primary">Press Ctrl+V</span>
+                          <span className="text-muted-foreground">to paste anywhere</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-3">
+                        Or click the microphone button below
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground italic text-center">
+                      Click microphone button to record
+                    </p>
+                  )}
                 </div>
               )}
-            </div>
-          </div>
         </div>
         </main>
-
+        
+        {/* Compact Footer Status Bar */}
+        <footer className="bg-muted/30 border-t border-border px-4 py-2">
+          <div className="container max-w-4xl mx-auto">
+            <div className="flex items-center justify-between text-[10px]">
+              {/* Condensed System Information */}
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>v1.0.0</span>
+                <span>•</span>
+                <span>{systemInfo?.gpuAvailable ? `${systemInfo.gpuMode}` : 'CPU'}</span>
+                <span>•</span>
+                <span>{systemInfo?.whisperModel?.replace('faster-whisper ', '') || 'tiny'}</span>
+              </div>
+              
+              {/* Status and Controls */}
+              <div className="flex items-center gap-3">
+                {/* Status Indicator */}
+                <div className="flex items-center gap-1.5">
+                  {privacyMode ? (
+                    <>
+                      <div className={`w-1.5 h-1.5 rounded-full ${privacyReminder ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                      <span className={`font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>
+                        🔒 Privacy
+                      </span>
+                    </>
+                  ) : isRecording ? (
+                    <>
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                      <span className="text-red-500 font-medium">Recording</span>
+                    </>
+                  ) : processingStatus === 'Processing...' ? (
+                    <>
+                      <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></div>
+                      <span className="text-yellow-600 font-medium">Processing</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                      <span className="text-green-600 font-medium">Ready</span>
+                    </>
+                  )}
+                </div>
+                
+                {/* Privacy Mode Toggle Button */}
+                <button
+                  onClick={() => {
+                    console.log('Privacy button clicked, current state:', privacyMode);
+                    setPrivacyMode(!privacyMode);
+                    console.log('Setting privacy mode to:', !privacyMode);
+                  }}
+                  className={`px-2 py-0.5 rounded text-[9px] font-medium transition-all duration-200 cursor-pointer border ${
+                    privacyMode 
+                      ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/40 border-orange-500/30' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 border-transparent hover:border-slate-300'
+                  }`}
+                  title={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
+                >
+                  Privacy
+                </button>
+              </div>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );
