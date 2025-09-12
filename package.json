@@ -4,12 +4,12 @@
   "description": "MVP-Echo - Windows 11 Voice-to-Text Transcription App",
   "main": "app/main/main-simple.js",
   "scripts": {
-    "dev": "concurrently \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "dev:renderer": "vite --port 5173",
-    "dev:electron": "electron app/main/main-simple.js",
-    "build": "vite build",
-    "start": "electron .",
-    "test": "echo \"No tests yet\""
+    "dev": "echo \"🚀 Starting MVP-Echo development...\" && echo \"\" && concurrently --prefix-colors \"cyan,yellow\" --prefix \"[{name}]\" --names \"renderer,electron\" \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "dev:renderer": "echo \"📦 Starting Vite renderer...\" && vite --port 5173",
+    "dev:electron": "echo \"⚡ Starting Electron main process...\" && NODE_ENV=development electron app/main/main-simple.js",
+    "build": "echo \"🔨 Building for production...\" && vite build",
+    "start": "echo \"🎯 Starting built application...\" && electron .",
+    "test": "echo \"🧪 No tests yet\""
   },
   "keywords": [
     "voice-to-text",

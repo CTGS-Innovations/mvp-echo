@@ -10,8 +10,10 @@ function createWindow() {
     minWidth: 400,
     minHeight: 600,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      preload: path.join(__dirname, '../preload/preload.js'),
     },
     titleBarStyle: 'default',
     show: false,
