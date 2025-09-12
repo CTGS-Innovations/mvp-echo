@@ -10,6 +10,8 @@ class AudioCapture {
   private analyser?: AnalyserNode;
   private dataArray?: Uint8Array;
   private onAudioLevel?: (level: number) => void;
+  private animationId?: number;
+  private sourceNode?: MediaStreamAudioSourceNode;
   
   getStream(): MediaStream | undefined {
     return this.stream;
@@ -27,8 +29,8 @@ class AudioCapture {
     this.analyser.fftSize = 256;
     this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
     
-    const source = this.audioContext.createMediaStreamSource(this.stream);
-    source.connect(this.analyser);
+    this.sourceNode = this.audioContext.createMediaStreamSource(this.stream);
+    this.sourceNode.connect(this.analyser);
     
     // Start monitoring audio levels
     this.monitorAudioLevel();
@@ -59,7 +61,7 @@ class AudioCapture {
       this.onAudioLevel(level);
       
       if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-        requestAnimationFrame(updateLevel);
+        this.animationId = requestAnimationFrame(updateLevel);
       }
     };
     
@@ -87,6 +89,18 @@ class AudioCapture {
   }
   
   cleanup(): void {
+    // Cancel any pending animation frames
+    if (this.animationId !== undefined) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = undefined;
+    }
+    
+    // Disconnect and clear source node first
+    if (this.sourceNode) {
+      this.sourceNode.disconnect();
+      this.sourceNode = undefined;
+    }
+    
     // Stop all tracks immediately
     if (this.stream) {
       this.stream.getTracks().forEach(track => {
@@ -96,9 +110,13 @@ class AudioCapture {
       this.stream = undefined;
     }
     
-    // Close audio context
+    // Close audio context and wait for it to close
     if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close();
+      this.audioContext.close().then(() => {
+        console.log('MVP-Echo: AudioContext closed');
+      }).catch(err => {
+        console.warn('MVP-Echo: AudioContext close failed:', err);
+      });
       this.audioContext = undefined;
     }
     
@@ -197,7 +215,7 @@ export default function App() {
         
         if (result.text?.trim()) {
           try {
-            await navigator.clipboard.writeText(result.text);
+            await (window as any).electronAPI.copyToClipboard(result.text);
             setProcessingStatus('Completed - Copied to clipboard!');
           } catch (e) {
             console.warn('Clipboard failed:', e);
@@ -272,7 +290,7 @@ export default function App() {
                 setProcessingStatus(`Completed (${result.engine})`);
                 
                 if (result.text?.trim()) {
-                  navigator.clipboard.writeText(result.text).then(() => {
+                  (window as any).electronAPI.copyToClipboard(result.text).then(() => {
                     setProcessingStatus('Completed - Copied to clipboard!');
                   }).catch(e => console.warn('Clipboard failed:', e));
                 }
