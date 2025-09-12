@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron';
 import * as path from 'path';
 
 let mainWindow: BrowserWindow;
+let isRecording = false;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -38,11 +39,13 @@ function createWindow() {
 // IPC Handlers for MVP
 ipcMain.handle('start-recording', async () => {
   console.log('Recording started');
+  isRecording = true;
   return { success: true, message: 'Recording started' };
 });
 
 ipcMain.handle('stop-recording', async () => {
   console.log('Recording stopped');
+  isRecording = false;
   return { success: true, message: 'Recording stopped' };
 });
 
@@ -194,12 +197,41 @@ async function mockTranscription() {
   };
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Register global shortcut for Ctrl+Alt+Z
+  const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
+    console.log('Global Ctrl+Alt+Z pressed');
+    
+    // Toggle recording state and notify renderer
+    if (!isRecording) {
+      // Start recording
+      isRecording = true;
+      mainWindow.webContents.send('global-shortcut-start-recording');
+    } else {
+      // Stop recording  
+      isRecording = false;
+      mainWindow.webContents.send('global-shortcut-stop-recording');
+    }
+  });
+
+  if (!ret) {
+    console.log('Global shortcut registration failed');
+  } else {
+    console.log('Global shortcut Ctrl+Alt+Z registered successfully');
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // Unregister global shortcuts
+  globalShortcut.unregisterAll();
 });
 
 app.on('activate', () => {

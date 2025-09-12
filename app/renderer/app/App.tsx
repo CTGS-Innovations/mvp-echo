@@ -1,21 +1,69 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import OceanVisualizer from './components/OceanVisualizer';
 
 // Audio recording functionality (renderer process)
 class AudioCapture {
   private mediaRecorder?: MediaRecorder;
   private audioChunks: Blob[] = [];
   private stream?: MediaStream;
+  private audioContext?: AudioContext;
+  private analyser?: AnalyserNode;
+  private dataArray?: Uint8Array;
+  private onAudioLevel?: (level: number) => void;
   
-  async startRecording(): Promise<void> {
+  getStream(): MediaStream | undefined {
+    return this.stream;
+  }
+
+  async startRecording(onAudioLevel?: (level: number) => void): Promise<void> {
+    this.onAudioLevel = onAudioLevel;
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.mediaRecorder = new MediaRecorder(this.stream);
     this.audioChunks = [];
+    
+    // Set up Web Audio API for real-time audio level detection
+    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    this.analyser = this.audioContext.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    
+    const source = this.audioContext.createMediaStreamSource(this.stream);
+    source.connect(this.analyser);
+    
+    // Start monitoring audio levels
+    this.monitorAudioLevel();
     
     this.mediaRecorder.ondataavailable = (event) => {
       this.audioChunks.push(event.data);
     };
     
     this.mediaRecorder.start();
+  }
+  
+  private monitorAudioLevel(): void {
+    if (!this.analyser || !this.dataArray) return;
+    
+    const updateLevel = () => {
+      if (!this.analyser || !this.dataArray || !this.onAudioLevel) return;
+      
+      this.analyser.getByteFrequencyData(this.dataArray);
+      
+      // Calculate RMS (Root Mean Square) for audio level
+      let sum = 0;
+      for (let i = 0; i < this.dataArray.length; i++) {
+        sum += this.dataArray[i] * this.dataArray[i];
+      }
+      const rms = Math.sqrt(sum / this.dataArray.length);
+      const level = rms / 255; // Normalize to 0-1
+      
+      this.onAudioLevel(level);
+      
+      if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+        requestAnimationFrame(updateLevel);
+      }
+    };
+    
+    updateLevel();
   }
   
   async stopRecording(): Promise<ArrayBuffer> {
@@ -40,8 +88,15 @@ class AudioCapture {
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
     }
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      this.audioContext.close();
+    }
     this.mediaRecorder = undefined;
     this.stream = undefined;
+    this.audioContext = undefined;
+    this.analyser = undefined;
+    this.dataArray = undefined;
+    this.onAudioLevel = undefined;
     this.audioChunks = [];
   }
 }
@@ -64,6 +119,7 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [processingStatus, setProcessingStatus] = useState('');
+  // Removed local Ctrl+Alt+Z state - now using global shortcuts
   
   const audioCapture = useRef(new AudioCapture());
 
@@ -82,19 +138,37 @@ export default function App() {
     fetchSystemInfo();
   }, []);
 
+  // Audio level is now handled by the real-time AudioCapture callback
+
+  // Global shortcut event listeners
   useEffect(() => {
-    // Mock audio level updates during recording
-    let levelInterval: NodeJS.Timeout;
-    if (isRecording) {
-      levelInterval = setInterval(() => {
-        setAudioLevel(Math.random());
-      }, 100);
+    if (isElectron) {
+      // Listen for global shortcut events from main process
+      (window as any).electronAPI.onGlobalShortcutStartRecording(() => {
+        console.log('Global shortcut: Start recording');
+        // Access current state through a function to avoid stale closures
+        setIsRecording(currentRecording => {
+          if (!currentRecording) {
+            // Trigger start recording
+            setTimeout(() => handleStartRecording(), 0);
+          }
+          return currentRecording;
+        });
+      });
+
+      (window as any).electronAPI.onGlobalShortcutStopRecording(() => {
+        console.log('Global shortcut: Stop recording');
+        // Access current state through a function to avoid stale closures
+        setIsRecording(currentRecording => {
+          if (currentRecording) {
+            // Trigger stop recording
+            setTimeout(() => handleStopRecording(), 0);
+          }
+          return currentRecording;
+        });
+      });
     }
-    
-    return () => {
-      if (levelInterval) clearInterval(levelInterval);
-    };
-  }, [isRecording]);
+  }, [isElectron]); // Only depend on isElectron since we're using state updater functions
 
   useEffect(() => {
     // Duration counter
@@ -112,13 +186,19 @@ export default function App() {
     };
   }, [isRecording]);
 
+  // Local keyboard shortcuts removed - now using global shortcuts from main process
+
   const handleStartRecording = async () => {
     try {
       setIsRecording(true);
       setTranscription('');
       setProcessingStatus('Starting recording...');
       
-      await audioCapture.current.startRecording();
+      // Pass the audio level callback to the AudioCapture
+      await audioCapture.current.startRecording((level: number) => {
+        setAudioLevel(level);
+      });
+      
       setProcessingStatus('Recording in progress...');
       
       // Call IPC to notify main process
@@ -153,6 +233,16 @@ export default function App() {
         setTranscription(result.text);
         setProcessingStatus(`Completed in ${result.processingTime || 'N/A'}ms (${result.engine})`);
         
+        // Copy to clipboard automatically
+        if (result.text && result.text.trim()) {
+          try {
+            await navigator.clipboard.writeText(result.text);
+            setProcessingStatus(`Completed - Copied to clipboard! (${result.processingTime || 'N/A'}ms)`);
+          } catch (clipboardError) {
+            console.warn('Failed to copy to clipboard:', clipboardError);
+          }
+        }
+        
         console.log('Transcription result:', result);
       } else {
         setProcessingStatus('No audio recorded');
@@ -174,8 +264,19 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Audio visualizer bars
-  const bars = Array.from({ length: 20 }, (_, i) => i);
+  // Copy to clipboard function
+  const copyToClipboard = async () => {
+    if (transcription && transcription.trim()) {
+      try {
+        await navigator.clipboard.writeText(transcription);
+        setProcessingStatus('Copied to clipboard!');
+        setTimeout(() => setProcessingStatus(''), 2000);
+      } catch (error) {
+        console.error('Failed to copy to clipboard:', error);
+        setProcessingStatus('Failed to copy to clipboard');
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -219,61 +320,30 @@ export default function App() {
       {/* Main Content with title bar offset */}
       <div className="main-content">
         <main className="container max-w-4xl mx-auto p-6 space-y-6">
-        {/* Recording Card */}
-        <div className="mvp-card p-6">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Voice Recording</h2>
-              <div className="text-sm text-muted-foreground font-mono">
-                {formatDuration(duration)}
-                {isRecording && <span className="ml-2 text-primary animate-pulse">●</span>}
-              </div>
-            </div>
-            
-            {/* Recording Controls */}
-            <div className="flex items-center justify-center">
-              <button
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-                className={isRecording ? "mvp-button-secondary" : "mvp-button-primary"}
-                style={{ minWidth: '200px' }}
-              >
-                <div className="flex items-center justify-center gap-3">
-                  {isRecording ? (
-                    <>
-                      <div className="w-4 h-4 bg-current rounded-sm"></div>
-                      Stop Recording
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-5 h-5 rounded-full bg-current"></div>
-                      Start Recording
-                    </>
-                  )}
-                </div>
-              </button>
-            </div>
-            
-            {/* Audio Visualizer */}
-            <div className="flex items-center justify-center gap-1 h-16 bg-muted/50 rounded-lg p-4">
-              {bars.map((bar) => {
-                const height = isRecording 
-                  ? Math.max(8, audioLevel * Math.random() * 40 + Math.sin(Date.now() / 100 + bar) * 10)
-                  : 8;
-                
-                return (
-                  <div
-                    key={bar}
-                    className={`w-2 bg-primary transition-all duration-100 rounded-sm ${
-                      isRecording ? 'recording-pulse' : ''
-                    }`}
-                    style={{
-                      height: `${height}px`,
-                      opacity: isRecording ? 0.8 : 0.3
-                    }}
-                  />
-                );
-              })}
-            </div>
+        {/* Ocean Audio Visualizer with Microphone Control */}
+        <div className="relative">
+          <OceanVisualizer isRecording={isRecording} audioLevel={audioLevel} />
+          
+          {/* Microphone Button - Bottom Right of Visualizer */}
+          <div className="absolute bottom-4 right-4">
+            <button
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 opacity-60 hover:opacity-100 ${
+                isRecording 
+                  ? 'bg-red-500/80 hover:bg-red-500 text-white shadow-md shadow-red-500/20' 
+                  : 'bg-primary/80 hover:bg-primary text-primary-foreground shadow-md shadow-primary/20'
+              }`}
+            >
+              {isRecording ? (
+                <div className="w-3 h-3 bg-current rounded-sm"></div>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C10.9 2 10 2.9 10 4V12C10 13.1 10.9 14 12 14C13.1 14 14 13.1 14 12V4C14 2.9 13.1 2 12 2Z"/>
+                  <path d="M18 12C18 15.3 15.3 18 12 18C8.7 18 6 15.3 6 12H4C4 16.4 7.6 20 12 20C16.4 20 20 16.4 20 12H18Z"/>
+                  <path d="M11 21V23H13V21H11Z"/>
+                </svg>
+              )}
+            </button>
           </div>
         </div>
 
@@ -309,6 +379,7 @@ export default function App() {
             
             <div className="flex gap-3">
               <button 
+                onClick={copyToClipboard}
                 className={`px-4 py-2 text-sm border rounded-lg transition-colors ${
                   transcription 
                     ? 'border-primary/50 hover:bg-primary/10 text-foreground hover:border-primary' 

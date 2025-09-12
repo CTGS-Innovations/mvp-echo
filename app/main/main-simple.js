@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const os = require('os');
 const { whisperEngine } = require('../stt/whisper-engine');
 
 let mainWindow;
+let isRecording = false;
 
 function createWindow() {
   const preloadPath = path.resolve(__dirname, '../preload/preload.js');
@@ -59,12 +60,41 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // Register global shortcut for Ctrl+Alt+Z
+  const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
+    console.log('Global Ctrl+Alt+Z pressed');
+    
+    // Toggle recording state and notify renderer
+    if (!isRecording) {
+      // Start recording
+      isRecording = true;
+      mainWindow.webContents.send('global-shortcut-start-recording');
+    } else {
+      // Stop recording  
+      isRecording = false;
+      mainWindow.webContents.send('global-shortcut-stop-recording');
+    }
+  });
+
+  if (!ret) {
+    console.log('Global shortcut registration failed');
+  } else {
+    console.log('Global shortcut Ctrl+Alt+Z registered successfully');
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('will-quit', () => {
+  // Unregister global shortcuts
+  globalShortcut.unregisterAll();
 });
 
 app.on('before-quit', async () => {

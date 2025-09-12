@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('transcription-result', callback),
   onAudioLevel: (callback: (level: number) => void) => 
     ipcRenderer.on('audio-level', callback),
+  onGlobalShortcutStartRecording: (callback: () => void) => 
+    ipcRenderer.on('global-shortcut-start-recording', callback),
+  onGlobalShortcutStopRecording: (callback: () => void) => 
+    ipcRenderer.on('global-shortcut-stop-recording', callback),
 });
 
 // Type declarations for TypeScript
@@ -25,6 +29,8 @@ declare global {
       getSystemInfo: () => Promise<any>;
       onTranscriptionResult: (callback: (result: any) => void) => void;
       onAudioLevel: (callback: (level: number) => void) => void;
+      onGlobalShortcutStartRecording: (callback: () => void) => void;
+      onGlobalShortcutStopRecording: (callback: () => void) => void;
     };
   }
 }

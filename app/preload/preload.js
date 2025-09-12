@@ -17,4 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
   exportText: (content, filename) => ipcRenderer.invoke('export-text', content, filename),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+  
+  // Global shortcut event listeners
+  onGlobalShortcutStartRecording: (callback) => ipcRenderer.on('global-shortcut-start-recording', callback),
+  onGlobalShortcutStopRecording: (callback) => ipcRenderer.on('global-shortcut-stop-recording', callback),
 });
