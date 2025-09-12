@@ -1,11 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+console.log('MVP-Echo: Preload script loaded successfully');
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Future STT functions
+  // STT functions
   startRecording: () => ipcRenderer.invoke('start-recording'),
   stopRecording: () => ipcRenderer.invoke('stop-recording'),
+  processAudio: (audioArray) => ipcRenderer.invoke('processAudio', audioArray),
   onTranscriptionResult: (callback) => ipcRenderer.on('transcription-result', callback),
   
   // System info

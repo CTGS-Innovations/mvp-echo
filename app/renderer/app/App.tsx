@@ -1,16 +1,86 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// Audio recording functionality (renderer process)
+class AudioCapture {
+  private mediaRecorder?: MediaRecorder;
+  private audioChunks: Blob[] = [];
+  private stream?: MediaStream;
+  
+  async startRecording(): Promise<void> {
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.mediaRecorder = new MediaRecorder(this.stream);
+    this.audioChunks = [];
+    
+    this.mediaRecorder.ondataavailable = (event) => {
+      this.audioChunks.push(event.data);
+    };
+    
+    this.mediaRecorder.start();
+  }
+  
+  async stopRecording(): Promise<ArrayBuffer> {
+    return new Promise((resolve) => {
+      if (!this.mediaRecorder) {
+        resolve(new ArrayBuffer(0));
+        return;
+      }
+      
+      this.mediaRecorder.onstop = async () => {
+        const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        const arrayBuffer = await blob.arrayBuffer();
+        this.cleanup();
+        resolve(arrayBuffer);
+      };
+      
+      this.mediaRecorder.stop();
+    });
+  }
+  
+  cleanup(): void {
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+    }
+    this.mediaRecorder = undefined;
+    this.stream = undefined;
+    this.audioChunks = [];
+  }
+}
 
 export default function App() {
-  console.log('MVP-Echo: App component rendered');
+  // Removed excessive logging to prevent console spam
+  
+  // Check if running in Electron
+  const isElectron = typeof (window as any).electronAPI !== 'undefined';
   
   // Debug: Log when component mounts
   useEffect(() => {
     console.log('MVP-Echo: App component mounted successfully');
+    console.log('MVP-Echo: Running in Electron:', isElectron);
   }, []);
+  
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [systemInfo, setSystemInfo] = useState<any>(null);
+  const [processingStatus, setProcessingStatus] = useState('');
+  
+  const audioCapture = useRef(new AudioCapture());
+
+  // Fetch system info on mount
+  useEffect(() => {
+    const fetchSystemInfo = async () => {
+      try {
+        const info = await (window as any).electronAPI.getSystemInfo();
+        setSystemInfo(info);
+        console.log('System info:', info);
+      } catch (error) {
+        console.error('Failed to get system info:', error);
+      }
+    };
+    
+    fetchSystemInfo();
+  }, []);
 
   useEffect(() => {
     // Mock audio level updates during recording
@@ -43,26 +113,59 @@ export default function App() {
   }, [isRecording]);
 
   const handleStartRecording = async () => {
-    setIsRecording(true);
-    setTranscription('');
-    
-    // Mock transcription after 2 seconds
-    setTimeout(() => {
-      const mockTexts = [
-        "Hello, this is a test of the MVP Echo transcription system.",
-        "The quick brown fox jumps over the lazy dog.",
-        "MVP Echo is working great with real-time transcription.",
-        "This is a demonstration of voice to text conversion.",
-        "The application is running smoothly on Windows 11."
-      ];
-      const randomText = mockTexts[Math.floor(Math.random() * mockTexts.length)];
-      setTranscription(randomText);
-    }, 2000);
+    try {
+      setIsRecording(true);
+      setTranscription('');
+      setProcessingStatus('Starting recording...');
+      
+      await audioCapture.current.startRecording();
+      setProcessingStatus('Recording in progress...');
+      
+      // Call IPC to notify main process
+      await (window as any).electronAPI.startRecording();
+      
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      setIsRecording(false);
+      setProcessingStatus('Failed to start recording');
+    }
   };
 
-  const handleStopRecording = () => {
-    setIsRecording(false);
-    setAudioLevel(0);
+  const handleStopRecording = async () => {
+    try {
+      setProcessingStatus('Stopping recording...');
+      
+      // Stop audio capture and get the recorded data
+      const audioBuffer = await audioCapture.current.stopRecording();
+      
+      // Call IPC to notify main process
+      await (window as any).electronAPI.stopRecording();
+      
+      if (audioBuffer.byteLength > 0) {
+        setProcessingStatus('Processing audio with ONNX Runtime...');
+        
+        // Convert ArrayBuffer to a format we can send over IPC
+        const audioArray = Array.from(new Uint8Array(audioBuffer));
+        
+        // Process audio with STT engine
+        const result = await (window as any).electronAPI.processAudio(audioArray);
+        
+        setTranscription(result.text);
+        setProcessingStatus(`Completed in ${result.processingTime || 'N/A'}ms (${result.engine})`);
+        
+        console.log('Transcription result:', result);
+      } else {
+        setProcessingStatus('No audio recorded');
+      }
+      
+    } catch (error) {
+      console.error('Failed to process recording:', error);
+      setProcessingStatus('Processing failed');
+      setTranscription('Error: Failed to process audio');
+    } finally {
+      setIsRecording(false);
+      setAudioLevel(0);
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -94,6 +197,24 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* Browser Warning */}
+      {!isElectron && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-6 mt-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                <strong>You're viewing MVP-Echo in a web browser.</strong> For full functionality including voice recording and transcription, please use the Electron desktop application that should have opened automatically.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content with title bar offset */}
       <div className="main-content">
@@ -161,10 +282,10 @@ export default function App() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Transcription</h2>
-              {isRecording && !transcription && (
+              {(isRecording || processingStatus) && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                  Processing...
+                  {processingStatus || 'Processing...'}
                 </div>
               )}
             </div>
@@ -228,14 +349,24 @@ export default function App() {
             <div className="flex items-center gap-4">
               <span className="font-medium">MVP-Echo v1.0.0</span>
               <span className="opacity-50">•</span>
-              <span>Engine: <span className="text-foreground">CPU Mode</span></span>
+              <span>Engine: <span className="text-foreground">
+                {systemInfo?.gpuAvailable ? `${systemInfo.gpuMode} Mode` : 'CPU Mode'}
+              </span></span>
               <span className="opacity-50">•</span>
-              <span>Platform: <span className="text-foreground">Windows 11</span></span>
+              <span>Platform: <span className="text-foreground">
+                {systemInfo?.platform === 'win32' ? 'Windows 11' : systemInfo?.platform || 'Unknown'}
+              </span></span>
             </div>
             
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-foreground font-medium">Ready</span>
+              <div className={`w-2 h-2 rounded-full animate-pulse ${
+                systemInfo?.sttInitialized ? 'bg-green-500' : 
+                systemInfo?.gpuAvailable ? 'bg-yellow-500' : 'bg-blue-500'
+              }`}></div>
+              <span className="text-foreground font-medium">
+                {systemInfo?.sttInitialized ? 'STT Ready' : 
+                 systemInfo?.gpuAvailable ? 'GPU Ready' : 'Ready'}
+              </span>
             </div>
           </div>
         </footer>
