@@ -295,19 +295,6 @@ export default function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Copy to clipboard function
-  const copyToClipboard = async () => {
-    if (transcription && transcription.trim()) {
-      try {
-        await navigator.clipboard.writeText(transcription);
-        setProcessingStatus('Copied to clipboard!');
-        setTimeout(() => setProcessingStatus(''), 2000);
-      } catch (error) {
-        console.error('Failed to copy to clipboard:', error);
-        setProcessingStatus('Failed to copy to clipboard');
-      }
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -324,8 +311,23 @@ export default function App() {
             </div>
             <h1 className="text-sm font-semibold text-foreground">MVP-Echo</h1>
           </div>
-          <div className="flex-1 text-center">
-            <span className="text-xs text-muted-foreground">Voice-to-Text Transcription</span>
+          <div className="flex-1 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+            <span className="font-medium">v1.0.0</span>
+            <span className="opacity-50">•</span>
+            <span>{systemInfo?.gpuAvailable ? `${systemInfo.gpuMode} Mode` : 'CPU Mode'}</span>
+            <span className="opacity-50">•</span>
+            <span>{systemInfo?.platform === 'win32' ? 'Windows' : systemInfo?.platform || 'Unknown'}</span>
+            <span className="opacity-50">•</span>
+            <div className="flex items-center gap-1">
+              <div className={`w-2 h-2 rounded-full animate-pulse ${
+                systemInfo?.sttInitialized ? 'bg-green-500' : 
+                systemInfo?.gpuAvailable ? 'bg-yellow-500' : 'bg-blue-500'
+              }`}></div>
+              <span className="text-foreground">
+                {systemInfo?.sttInitialized ? 'Ready' : 
+                 systemInfo?.gpuAvailable ? 'GPU Ready' : 'Ready'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -409,71 +411,10 @@ export default function App() {
                 </div>
               )}
             </div>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={copyToClipboard}
-                className={`px-4 py-2 text-sm border rounded-lg transition-colors ${
-                  transcription 
-                    ? 'border-primary/50 hover:bg-primary/10 text-foreground hover:border-primary' 
-                    : 'border-border text-muted-foreground cursor-not-allowed'
-                }`}
-                disabled={!transcription}
-              >
-                📋 Copy Text
-              </button>
-              <button 
-                className={`px-4 py-2 text-sm border rounded-lg transition-colors ${
-                  transcription 
-                    ? 'border-primary/50 hover:bg-primary/10 text-foreground hover:border-primary' 
-                    : 'border-border text-muted-foreground cursor-not-allowed'
-                }`}
-                disabled={!transcription}
-              >
-                💾 Export TXT
-              </button>
-              <button 
-                className={`px-4 py-2 text-sm border rounded-lg transition-colors ${
-                  transcription 
-                    ? 'border-primary/50 hover:bg-primary/10 text-foreground hover:border-primary' 
-                    : 'border-border text-muted-foreground cursor-not-allowed'
-                }`}
-                disabled={!transcription}
-              >
-                📝 Export MD
-              </button>
-            </div>
           </div>
         </div>
         </main>
 
-        {/* Status Bar */}
-        <footer className="border-t border-border bg-muted/30 p-4 mt-8">
-          <div className="container max-w-4xl mx-auto flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span className="font-medium">MVP-Echo v1.0.0</span>
-              <span className="opacity-50">•</span>
-              <span>Engine: <span className="text-foreground">
-                {systemInfo?.gpuAvailable ? `${systemInfo.gpuMode} Mode` : 'CPU Mode'}
-              </span></span>
-              <span className="opacity-50">•</span>
-              <span>Platform: <span className="text-foreground">
-                {systemInfo?.platform === 'win32' ? 'Windows 11' : systemInfo?.platform || 'Unknown'}
-              </span></span>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${
-                systemInfo?.sttInitialized ? 'bg-green-500' : 
-                systemInfo?.gpuAvailable ? 'bg-yellow-500' : 'bg-blue-500'
-              }`}></div>
-              <span className="text-foreground font-medium">
-                {systemInfo?.sttInitialized ? 'STT Ready' : 
-                 systemInfo?.gpuAvailable ? 'GPU Ready' : 'Ready'}
-              </span>
-            </div>
-          </div>
-        </footer>
       </div>
     </div>
   );
