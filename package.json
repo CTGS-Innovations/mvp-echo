@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "echo \"🚀 Starting MVP-Echo development...\" && echo \"\" && concurrently --prefix-colors \"cyan,yellow\" --prefix \"[{name}]\" --names \"renderer,electron\" \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "echo \"📦 Starting Vite renderer...\" && vite --port 5173",
-    "dev:electron": "echo \"⚡ Starting Electron main process...\" && NODE_ENV=development electron app/main/main-simple.js",
+    "dev:electron": "echo \"⚡ Starting Electron main process...\" && set NODE_ENV=development&& electron app/main/main-simple.js",
     "build": "echo \"🔨 Building for production...\" && vite build",
     "start": "echo \"🎯 Starting built application...\" && electron .",
     "test": "echo \"🧪 No tests yet\""
@@ -21,8 +21,6 @@
   "license": "MIT",
   "dependencies": {
     "electron": "^28.0.0",
-    "onnxruntime-node": "^1.22.0",
-    "onnxruntime-web": "^1.22.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

@@ -17,7 +17,16 @@
         </div>
       </div>
     </div>
-    <script type="module" src="/app/main.tsx" onerror="console.error('Failed to load main.tsx')"></script>
+    <script type="module">
+      import('./app/main.tsx').catch(err => {
+        console.error('Failed to load main.tsx:', err);
+        // Fallback: try loading from the dev server directly
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'http://localhost:5173/app/main.tsx';
+        document.head.appendChild(script);
+      });
+    </script>
     <script>
       // Debug: Log when HTML is fully loaded
       document.addEventListener('DOMContentLoaded', () => {

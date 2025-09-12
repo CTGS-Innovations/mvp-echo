@@ -20,6 +20,13 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+    middlewareMode: false,
+    hmr: {
+      port: 5174,
+    },
   },
   optimizeDeps: {
     exclude: ['electron'],

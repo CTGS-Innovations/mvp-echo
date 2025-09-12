@@ -40,10 +40,13 @@ function createWindow() {
   });
 
   // Load the React app
+  console.log('MVP-Echo: NODE_ENV =', process.env.NODE_ENV);
   if (process.env.NODE_ENV === 'development') {
+    console.log('MVP-Echo: Loading from Vite dev server at http://localhost:5173');
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
+    console.log('MVP-Echo: Loading from local file system');
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
@@ -95,7 +98,26 @@ ipcMain.handle('get-system-info', async () => {
   
   try {
     const ort = require('onnxruntime-node');
-    const availableProviders = ort.InferenceSession.getAvailableProviders();
+    let availableProviders = [];
+    
+    // Try different ways to get providers
+    try {
+      if (ort.env && ort.env.availableProviders) {
+        availableProviders = ort.env.availableProviders;
+      } else if (ort.InferenceSession && ort.InferenceSession.getAvailableProviders) {
+        availableProviders = ort.InferenceSession.getAvailableProviders();
+      } else {
+        // Assume basic providers
+        availableProviders = ['CPUExecutionProvider'];
+        if (process.platform === 'win32') {
+          availableProviders.unshift('DmlExecutionProvider');
+        }
+      }
+    } catch (apiError) {
+      console.log('ONNX Runtime API detection failed, using defaults');
+      availableProviders = ['CPUExecutionProvider'];
+    }
+    
     hasGpu = availableProviders.includes('DmlExecutionProvider') || availableProviders.includes('CUDAExecutionProvider');
     
     if (availableProviders.includes('DmlExecutionProvider')) {
@@ -105,6 +127,8 @@ ipcMain.handle('get-system-info', async () => {
     } else {
       gpuProvider = 'CPU';
     }
+    
+    console.log('ONNX Runtime providers detected:', availableProviders);
   } catch (error) {
     console.warn('Could not detect GPU capabilities:', error);
   }
