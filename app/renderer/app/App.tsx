@@ -74,22 +74,15 @@ class AudioCapture {
         return;
       }
       
-      // Store audio chunks before cleanup
-      const chunks = [...this.audioChunks];
-      
       this.mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
         const arrayBuffer = await blob.arrayBuffer();
+        // Cleanup AFTER we've processed the audio
+        this.cleanup();
         resolve(arrayBuffer);
       };
       
       this.mediaRecorder.stop();
-      
-      // Cleanup immediately after stopping recorder
-      // Don't wait for onstop event for cleanup
-      setTimeout(() => {
-        this.cleanup();
-      }, 100); // Small delay to ensure stop event fires first
     });
   }
   
@@ -154,9 +147,9 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [processingStatus, setProcessingStatus] = useState('');
-  const [isCtrlAltZPressed, setIsCtrlAltZPressed] = useState(false);
   
   const audioCapture = useRef(new AudioCapture());
+  const isProcessing = useRef(false); // Guard against duplicate operations
 
   // Fetch system info on mount
   useEffect(() => {
@@ -185,7 +178,7 @@ export default function App() {
         setIsRecording(currentRecording => {
           if (!currentRecording) {
             // Trigger start recording
-            setTimeout(() => handleStartRecording(), 0);
+            setTimeout(() => handleStartRecording('global-shortcut'), 0);
           }
           return currentRecording;
         });
@@ -197,7 +190,7 @@ export default function App() {
         setIsRecording(currentRecording => {
           if (currentRecording) {
             // Trigger stop recording
-            setTimeout(() => handleStopRecording(), 0);
+            setTimeout(() => handleStopRecording('global-shortcut'), 0);
           }
           return currentRecording;
         });
@@ -221,41 +214,22 @@ export default function App() {
     };
   }, [isRecording]);
 
-  // Local push-to-talk keyboard shortcuts (works when Electron app is focused)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.altKey && e.code === 'KeyZ' && !isCtrlAltZPressed) {
-        e.preventDefault();
-        setIsCtrlAltZPressed(true);
-        if (!isRecording) {
-          console.log('Local push-to-talk: Starting recording');
-          handleStartRecording();
-        }
-      }
-    };
+  // Note: Local keyboard shortcuts removed - using global shortcuts from main process instead
+  // This prevents conflicts between global and local handlers
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'KeyZ' && isCtrlAltZPressed) {
-        e.preventDefault();
-        setIsCtrlAltZPressed(false);
-        if (isRecording) {
-          console.log('Local push-to-talk: Stopping recording');
-          handleStopRecording();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [isRecording, isCtrlAltZPressed]);
-
-  const handleStartRecording = async () => {
+  const handleStartRecording = async (source = 'unknown') => {
+    console.log(`🎤 handleStartRecording called from: ${source}`);
+    
+    // Prevent duplicate starts
+    if (isProcessing.current || isRecording) {
+      console.log(`⚠️ Recording already in progress, ignoring start request from: ${source}`);
+      return;
+    }
+    
+    isProcessing.current = true;
+    
     try {
+      console.log(`✅ Starting recording initiated by: ${source}`);
       setIsRecording(true);
       setTranscription('');
       setProcessingStatus('Starting recording...');
@@ -268,24 +242,37 @@ export default function App() {
       setProcessingStatus('Recording in progress...');
       
       // Call IPC to notify main process
-      await (window as any).electronAPI.startRecording();
+      await (window as any).electronAPI.startRecording(source);
       
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error(`❌ Failed to start recording from ${source}:`, error);
       setIsRecording(false);
       setProcessingStatus('Failed to start recording');
+    } finally {
+      isProcessing.current = false;
     }
   };
 
-  const handleStopRecording = async () => {
+  const handleStopRecording = async (source = 'unknown') => {
+    console.log(`🛑 handleStopRecording called from: ${source}`);
+    
+    // Prevent duplicate stops
+    if (isProcessing.current || !isRecording) {
+      console.log(`⚠️ Not recording or already processing, ignoring stop request from: ${source}`);
+      return;
+    }
+    
+    isProcessing.current = true;
+    
     try {
+      console.log(`✅ Stopping recording initiated by: ${source}`);
       setProcessingStatus('Stopping recording...');
       
       // Stop audio capture and get the recorded data
       const audioBuffer = await audioCapture.current.stopRecording();
       
       // Call IPC to notify main process
-      await (window as any).electronAPI.stopRecording();
+      await (window as any).electronAPI.stopRecording(source);
       
       if (audioBuffer.byteLength > 0) {
         setProcessingStatus('Processing audio with ONNX Runtime...');
@@ -309,18 +296,20 @@ export default function App() {
           }
         }
         
-        console.log('Transcription result:', result);
+        console.log(`📝 Transcription result from ${source}:`, result);
       } else {
+        console.log(`❌ No audio recorded from ${source}`);
         setProcessingStatus('No audio recorded');
       }
       
     } catch (error) {
-      console.error('Failed to process recording:', error);
+      console.error(`❌ Failed to process recording from ${source}:`, error);
       setProcessingStatus('Processing failed');
       setTranscription('Error: Failed to process audio');
     } finally {
       setIsRecording(false);
       setAudioLevel(0);
+      isProcessing.current = false;
     }
   };
 
@@ -405,7 +394,7 @@ export default function App() {
           {/* Microphone Button - Bottom Right of Visualizer */}
           <div className="absolute bottom-4 right-4">
             <button
-              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              onClick={isRecording ? () => handleStopRecording('button-click') : () => handleStartRecording('button-click')}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 opacity-60 hover:opacity-100 ${
                 isRecording 
                   ? 'bg-red-500/80 hover:bg-red-500 text-white shadow-md shadow-red-500/20' 

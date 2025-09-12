@@ -29,6 +29,7 @@ log(`MVP-Echo: User data path: ${app.getPath('userData')}`);
 
 let mainWindow;
 let isRecording = false;
+let lastShortcutTime = 0;
 
 function createWindow() {
   const preloadPath = path.resolve(__dirname, '../preload/preload.js');
@@ -92,16 +93,25 @@ app.whenReady().then(() => {
   
   // Register global shortcut for Ctrl+Alt+Z - simple toggle for now
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
-    log('Global Ctrl+Alt+Z pressed');
+    const now = Date.now();
+    
+    // Debounce: ignore if called within 500ms of last call
+    if (now - lastShortcutTime < 500) {
+      log('⚠️ Global shortcut ignored (debounced)');
+      return;
+    }
+    lastShortcutTime = now;
+    
+    log('🔥 Global Ctrl+Alt+Z pressed');
     
     if (!isRecording) {
-      // Start recording
-      log('Starting recording via global shortcut');
+      // Start recording via global shortcut
+      log('🎤 Recording started via: global-shortcut');
       isRecording = true;
       mainWindow.webContents.send('global-shortcut-start-recording');
     } else {
-      // Stop recording
-      log('Stopping recording via global shortcut');
+      // Stop recording via global shortcut  
+      log('🛑 Recording stopped via: global-shortcut');
       isRecording = false;
       mainWindow.webContents.send('global-shortcut-stop-recording');
     }
@@ -172,21 +182,21 @@ ipcMain.handle('get-system-info', async () => {
 });
 
 // Recording handlers - simplified since audio recording is handled in renderer
-ipcMain.handle('start-recording', async () => {
-  log('Starting recording...');
+ipcMain.handle('start-recording', async (event, source = 'unknown') => {
+  log(`🎤 Recording started via: ${source}`);
   isRecording = true;
   return { 
     success: true, 
-    message: 'Recording started' 
+    message: `Recording started via ${source}` 
   };
 });
 
-ipcMain.handle('stop-recording', async () => {
-  log('Stopping recording...');
+ipcMain.handle('stop-recording', async (event, source = 'unknown') => {
+  log(`🛑 Recording stopped via: ${source}`);
   isRecording = false;
   return { 
     success: true, 
-    message: 'Recording stopped' 
+    message: `Recording stopped via ${source}` 
   };
 });
 
