@@ -1,0 +1,41 @@
+{
+  "version": "1.0.0",
+  "models": {
+    "tiny": {
+      "name": "whisper-tiny",
+      "size": "tiny",
+      "url": "https://github.com/mvp-echo/models/releases/download/v1.0.0/whisper-tiny.onnx",
+      "sha256": "",
+      "fileSize": 41943040,
+      "description": "Fastest model, good for real-time transcription",
+      "languages": ["en"],
+      "accuracy": "Good",
+      "speed": "Very Fast"
+    },
+    "base": {
+      "name": "whisper-base",
+      "size": "base", 
+      "url": "https://github.com/mvp-echo/models/releases/download/v1.0.0/whisper-base.onnx",
+      "sha256": "",
+      "fileSize": 147964928,
+      "description": "Balanced model for most use cases",
+      "languages": ["en", "es", "fr", "de", "it"],
+      "accuracy": "Very Good",
+      "speed": "Fast"
+    },
+    "small": {
+      "name": "whisper-small",
+      "size": "small",
+      "url": "https://github.com/mvp-echo/models/releases/download/v1.0.0/whisper-small.onnx", 
+      "sha256": "",
+      "fileSize": 247463936,
+      "description": "High accuracy model for production use",
+      "languages": ["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko"],
+      "accuracy": "Excellent", 
+      "speed": "Medium"
+    }
+  },
+  "defaultModel": "base",
+  "minDiskSpace": 500000000,
+  "cacheLocation": "%LOCALAPPDATA%/MVP-Echo/models/"
+}
