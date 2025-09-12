@@ -63,17 +63,18 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
   
-  // Register global shortcut for Ctrl+Alt+Z
+  // Register global shortcut for Ctrl+Alt+Z - simple toggle for now
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
     console.log('Global Ctrl+Alt+Z pressed');
     
-    // Toggle recording state and notify renderer
     if (!isRecording) {
       // Start recording
+      console.log('Starting recording via global shortcut');
       isRecording = true;
       mainWindow.webContents.send('global-shortcut-start-recording');
     } else {
-      // Stop recording  
+      // Stop recording
+      console.log('Stopping recording via global shortcut');
       isRecording = false;
       mainWindow.webContents.send('global-shortcut-stop-recording');
     }
@@ -113,7 +114,6 @@ app.on('activate', () => {
 });
 
 // IPC Handlers for STT functionality
-let isRecording = false;
 let mediaRecorder = null;
 
 // System info handler

@@ -261,6 +261,7 @@ export default function OceanVisualizer({ isRecording, audioLevel }: OceanVisual
   // Audio setup functions
   const setupAudio = async () => {
     try {
+      // Always create a fresh audio context
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyserNode = audioContextRef.current.createAnalyser();
       analyserNode.fftSize = clampPow2(settings.fft);
@@ -274,13 +275,31 @@ export default function OceanVisualizer({ isRecording, audioLevel }: OceanVisual
       
       if (isRecording) {
         // Connect to microphone when recording - exactly like the working ui-mock.html
+        console.log('OceanVisualizer: Setting up microphone for recording');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioContextRef.current.createMediaStreamSource(stream);
         source.connect(analyserNode);
+      } else {
+        console.log('OceanVisualizer: Setup for static mode (no microphone)');
       }
       // When not recording, analyser node exists but no audio connected = will get flat data
     } catch (error) {
       console.warn('Audio setup failed:', error);
+      // Create minimal analyser for static mode
+      if (!analyserRef.current.node) {
+        try {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const analyserNode = audioContextRef.current.createAnalyser();
+          analyserNode.fftSize = 256;
+          analyserRef.current = {
+            node: analyserNode,
+            dataF: new Uint8Array(analyserNode.frequencyBinCount),
+            dataT: new Uint8Array(analyserNode.fftSize),
+          };
+        } catch (fallbackError) {
+          console.error('Failed to create fallback audio context:', fallbackError);
+        }
+      }
     }
   };
 
@@ -340,13 +359,21 @@ export default function OceanVisualizer({ isRecording, audioLevel }: OceanVisual
 
   // Update audio source when recording state changes
   useEffect(() => {
-    if (analyserRef.current.node) {
-      // Clean up existing connections and restart audio with new source
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-      }
-      setupAudio();
+    // Clean up existing audio context completely
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
     }
+    
+    // Reset analyser reference
+    analyserRef.current = {
+      node: null,
+      dataF: null,
+      dataT: null
+    };
+    
+    // Setup new audio context
+    setupAudio();
   }, [isRecording]);
 
   return (

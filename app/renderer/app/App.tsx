@@ -119,7 +119,7 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [processingStatus, setProcessingStatus] = useState('');
-  // Removed local Ctrl+Alt+Z state - now using global shortcuts
+  const [isCtrlAltZPressed, setIsCtrlAltZPressed] = useState(false);
   
   const audioCapture = useRef(new AudioCapture());
 
@@ -186,7 +186,38 @@ export default function App() {
     };
   }, [isRecording]);
 
-  // Local keyboard shortcuts removed - now using global shortcuts from main process
+  // Local push-to-talk keyboard shortcuts (works when Electron app is focused)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && e.code === 'KeyZ' && !isCtrlAltZPressed) {
+        e.preventDefault();
+        setIsCtrlAltZPressed(true);
+        if (!isRecording) {
+          console.log('Local push-to-talk: Starting recording');
+          handleStartRecording();
+        }
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'KeyZ' && isCtrlAltZPressed) {
+        e.preventDefault();
+        setIsCtrlAltZPressed(false);
+        if (isRecording) {
+          console.log('Local push-to-talk: Stopping recording');
+          handleStopRecording();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isRecording, isCtrlAltZPressed]);
 
   const handleStartRecording = async () => {
     try {
@@ -370,7 +401,9 @@ export default function App() {
                   <p className="text-muted-foreground italic text-center">
                     {isRecording 
                       ? "🎤 Listening and processing your speech..." 
-                      : "Click 'Start Recording' to begin transcription"
+                      : isElectron 
+                        ? "Hold Ctrl+Alt+Z to record (or click microphone button)"
+                        : "Click microphone button to record"
                     }
                   </p>
                 </div>
