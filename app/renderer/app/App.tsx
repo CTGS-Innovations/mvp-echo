@@ -365,16 +365,21 @@ export default function App() {
               {isRecording ? (
                 <>
                   <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                  <span className="text-red-500 font-medium">Listening</span>
+                  <span className="text-red-500 font-medium">🎤 Recording</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" className="text-red-500">
                     <path fill="currentColor" d="M12 14C13.66 14 15 12.66 15 11V5C15 3.34 13.66 2 12 2S9 3.34 9 5V11C9 12.66 10.34 14 12 14Z"/>
                     <path fill="currentColor" d="M17 11C17 13.76 14.76 16 12 16S7 13.76 7 11H5C5 14.53 7.61 17.43 11 17.92V21H13V17.92C16.39 17.43 19 14.53 19 11H17Z"/>
                   </svg>
                 </>
+              ) : processingStatus === 'Processing...' ? (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                  <span className="text-yellow-600 font-medium">⏳ Releasing microphone...</span>
+                </>
               ) : (
                 <>
-                  <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                  <span className="text-muted-foreground">Not Listening</span>
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  <span className="text-green-600 font-medium">Ready</span>
                   <svg width="14" height="14" viewBox="0 0 24 24" className="text-muted-foreground opacity-50">
                     <path fill="currentColor" d="M19 11H17.3C17.3 11.7 17.1 12.4 16.8 13L18.2 14.4C18.7 13.4 19 12.2 19 11ZM15 11.2V11V5C15 3.3 13.7 2 12 2S9 3.3 9 5V5.2L15 11.2ZM4.3 3L3 4.3L9 10.3V11C9 12.7 10.3 14 12 14C12.2 14 12.5 14 12.7 13.9L14.8 16C13.9 16.6 13 16.9 12 17C8.7 17 6 14.3 6 11H4C4 14.5 6.6 17.4 10 17.9V21H14V17.9C14.3 17.9 14.7 17.8 15 17.7L19.7 22.4L21 21.1L4.3 3Z"/>
                   </svg>
