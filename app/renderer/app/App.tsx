@@ -162,11 +162,6 @@ export default function App() {
 
   const [systemInfo, setSystemInfo] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
-  
-  // Sync ref when state changes
-  useEffect(() => {
-    isRecordingRef.current = isRecording;
-  }, [isRecording]);
   const [transcription, setTranscription] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -174,6 +169,16 @@ export default function App() {
   const [privacyReminder, setPrivacyReminder] = useState(false);
   const audioCapture = useRef(new AudioCapture());
   const isRecordingRef = useRef(false);
+  const privacyModeRef = useRef(false);
+  
+  // Sync refs when state changes
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+  
+  useEffect(() => {
+    privacyModeRef.current = privacyMode;
+  }, [privacyMode]);
 
 
   const handleStartRecording = useCallback(async (source = 'unknown') => {
@@ -269,10 +274,16 @@ export default function App() {
       const unsubscribe = (window as any).electronAPI.onGlobalShortcutToggle(() => {
         console.log('🌐 Global shortcut toggle event received');
         
-        // Check privacy mode first
-        if (privacyMode) {
+        // Check privacy mode first using ref for current value
+        if (privacyModeRef.current) {
           console.log('🔒 Privacy mode active - showing reminder');
           setPrivacyReminder(true);
+          
+          // Bring window to foreground for visibility
+          (window as any).electronAPI.bringToForeground().catch(err => 
+            console.warn('Failed to bring window to foreground:', err)
+          );
+          
           // Clear reminder after animation
           setTimeout(() => setPrivacyReminder(false), 2000);
           return;
@@ -351,7 +362,9 @@ export default function App() {
 
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className={`min-h-screen bg-background text-foreground transition-all duration-500 ${
+      privacyReminder ? 'ring-4 ring-orange-400/50 shadow-2xl shadow-orange-400/20' : ''
+    }`}>
       {/* Modern Windows 11 Title Bar with native controls */}
       <div className="title-bar draggable">
         <div className="title-bar-content">
@@ -372,37 +385,53 @@ export default function App() {
             <span className="opacity-50">•</span>
             <span>{systemInfo?.whisperModel || 'Model loading...'}</span>
             <span className="opacity-50">•</span>
-            <div className="flex items-center gap-2">
-              {privacyMode ? (
-                <>
-                  <div className={`w-2 h-2 rounded-full ${privacyReminder ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                  <span className={`font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>
-                    🔒 Privacy Mode
-                  </span>
-                </>
-              ) : isRecording ? (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                  <span className="text-red-500 font-medium">🎤 Recording</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" className="text-red-500">
-                    <path fill="currentColor" d="M12 14C13.66 14 15 12.66 15 11V5C15 3.34 13.66 2 12 2S9 3.34 9 5V11C9 12.66 10.34 14 12 14Z"/>
-                    <path fill="currentColor" d="M17 11C17 13.76 14.76 16 12 16S7 13.76 7 11H5C5 14.53 7.61 17.43 11 17.92V21H13V17.92C16.39 17.43 19 14.53 19 11H17Z"/>
-                  </svg>
-                </>
-              ) : processingStatus === 'Processing...' ? (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                  <span className="text-yellow-600 font-medium">⏳ Releasing microphone...</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-green-600 font-medium">Ready</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" className="text-muted-foreground opacity-50">
-                    <path fill="currentColor" d="M19 11H17.3C17.3 11.7 17.1 12.4 16.8 13L18.2 14.4C18.7 13.4 19 12.2 19 11ZM15 11.2V11V5C15 3.3 13.7 2 12 2S9 3.3 9 5V5.2L15 11.2ZM4.3 3L3 4.3L9 10.3V11C9 12.7 10.3 14 12 14C12.2 14 12.5 14 12.7 13.9L14.8 16C13.9 16.6 13 16.9 12 17C8.7 17 6 14.3 6 11H4C4 14.5 6.6 17.4 10 17.9V21H14V17.9C14.3 17.9 14.7 17.8 15 17.7L19.7 22.4L21 21.1L4.3 3Z"/>
-                  </svg>
-                </>
-              )}
+            <div className="flex items-center gap-3">
+              {/* Status Indicator */}
+              <div className="flex items-center gap-2">
+                {privacyMode ? (
+                  <>
+                    <div className={`w-2 h-2 rounded-full ${privacyReminder ? 'bg-orange-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                    <span className={`font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-500'}`}>
+                      🔒 Privacy Mode
+                    </span>
+                  </>
+                ) : isRecording ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                    <span className="text-red-500 font-medium">Recording</span>
+                  </>
+                ) : processingStatus === 'Processing...' ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                    <span className="text-yellow-600 font-medium">⏳ Releasing microphone...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span className="text-green-600 font-medium">Ready</span>
+                  </>
+                )}
+              </div>
+              
+              {/* Privacy Mode Toggle Button */}
+              <button
+                onClick={() => {
+                  console.log('Privacy button clicked, current state:', privacyMode);
+                  setPrivacyMode(!privacyMode);
+                  console.log('Setting privacy mode to:', !privacyMode);
+                }}
+                className={`non-draggable px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer border ${
+                  privacyMode 
+                    ? 'bg-orange-500/20 text-orange-600 hover:bg-orange-500/40 border-orange-500/30' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200 border-transparent hover:border-slate-300'
+                }`}
+                style={{ pointerEvents: 'auto' }}
+                title={privacyMode ? "Disable Privacy Mode" : "Enable Privacy Mode"}
+                onMouseEnter={() => console.log('Privacy button hover enter')}
+                onMouseLeave={() => console.log('Privacy button hover leave')}
+              >
+                Privacy
+              </button>
             </div>
           </div>
         </div>
@@ -437,10 +466,15 @@ export default function App() {
           <div className="absolute bottom-4 right-4">
             <button
               onClick={() => handleRecordingToggle('button-click')}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 opacity-60 hover:opacity-100 ${
-                isRecording 
-                  ? 'bg-red-500/80 hover:bg-red-500 text-white shadow-md shadow-red-500/20' 
-                  : 'bg-primary/80 hover:bg-primary text-primary-foreground shadow-md shadow-primary/20'
+              disabled={privacyMode}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 ${
+                privacyMode
+                  ? 'opacity-30 cursor-not-allowed bg-gray-400/50'
+                  : `opacity-60 hover:opacity-100 ${
+                      isRecording 
+                        ? 'bg-red-500/80 hover:bg-red-500 text-white shadow-md shadow-red-500/20' 
+                        : 'bg-primary/80 hover:bg-primary text-primary-foreground shadow-md shadow-primary/20'
+                    }`
               }`}
             >
               {isRecording ? (
@@ -470,7 +504,17 @@ export default function App() {
             </div>
             
             <div className="min-h-[200px] p-6 bg-muted/50 rounded-lg border-2 border-dashed border-border">
-              {transcription ? (
+              {privacyMode ? (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
+                  <div className={`text-6xl ${privacyReminder ? 'animate-pulse' : ''}`}>🔒</div>
+                  <h3 className={`text-xl font-medium ${privacyReminder ? 'text-orange-500 animate-pulse' : 'text-gray-600'}`}>
+                    Privacy Mode Active
+                  </h3>
+                  <p className="text-muted-foreground max-w-md">
+                    Recording is disabled to protect your privacy. {privacyReminder ? 'You just tried to record!' : 'Click the lock button to resume recording.'}
+                  </p>
+                </div>
+              ) : transcription ? (
                 <p className="text-base leading-relaxed text-foreground">
                   {transcription}
                 </p>
@@ -480,7 +524,7 @@ export default function App() {
                     {isRecording 
                       ? "🎤 Listening and processing your speech..." 
                       : isElectron 
-                        ? "Press Up arrow to record (or click microphone button)"
+                        ? "Press Ctrl+Alt+Z to record (or click microphone button)"
                         : "Click microphone button to record"
                     }
                   </p>

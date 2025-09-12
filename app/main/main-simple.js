@@ -206,6 +206,29 @@ ipcMain.handle('copy-to-clipboard', async (event, text) => {
   return { success: true };
 });
 
+// Bring window to foreground handler
+ipcMain.handle('bring-to-foreground', async () => {
+  if (mainWindow) {
+    // Show the window if it's hidden
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    
+    // Focus the window
+    mainWindow.focus();
+    
+    // Bring to front on all platforms
+    mainWindow.setAlwaysOnTop(true);
+    setTimeout(() => {
+      mainWindow.setAlwaysOnTop(false);
+    }, 100);
+    
+    log('🔝 Window brought to foreground for privacy reminder');
+    return { success: true };
+  }
+  return { success: false, error: 'Window not available' };
+});
+
 // Process audio with STT
 ipcMain.handle('processAudio', async (event, audioArray) => {
   log('🎤 Processing audio array of length: ' + audioArray.length);

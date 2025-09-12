@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File operations
   exportText: (content, filename) => ipcRenderer.invoke('export-text', content, filename),
   copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
+  bringToForeground: () => ipcRenderer.invoke('bring-to-foreground'),
   
   // Global shortcut event listeners
   onGlobalShortcutToggle: (callback) => {
