@@ -80,6 +80,28 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
+  });
+
+  // Ensure window comes to foreground when activated
+  mainWindow.on('focus', () => {
+    log('Window focused');
+  });
+  
+  // Handle window activation (especially from taskbar/dock click)
+  mainWindow.on('show', () => {
+    mainWindow.focus();
+    if (process.platform === 'win32') {
+      mainWindow.moveTop();
+    }
+  });
+  
+  // Handle restore from minimize
+  mainWindow.on('restore', () => {
+    mainWindow.focus();
+    if (process.platform === 'win32') {
+      mainWindow.moveTop();
+    }
   });
 
   mainWindow.on('closed', () => {
@@ -99,9 +121,33 @@ app.whenReady().then(() => {
     }
     
     shortcutActive = true;
-    log('🔥 Global Ctrl+Alt+Z detected - sending single toggle event');
+    log('🔥 Global Ctrl+Alt+Z detected - bringing window to foreground');
     
-    // Send toggle command to renderer - renderer's event system handles state logic
+    // IMMEDIATELY bring window to foreground before sending event
+    if (mainWindow) {
+      // Restore if minimized
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      
+      // Show if hidden
+      if (!mainWindow.isVisible()) {
+        mainWindow.show();
+      }
+      
+      // Force window to foreground on Windows
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.focus();
+      mainWindow.setAlwaysOnTop(false);
+      
+      // Windows-specific extra focus methods
+      if (process.platform === 'win32') {
+        mainWindow.moveTop();
+        mainWindow.setSkipTaskbar(false);
+      }
+    }
+    
+    // Now send toggle command to renderer
     mainWindow.webContents.send('global-shortcut-toggle');
     
     // Longer debounce to prevent multiple key combination detections
@@ -209,21 +255,28 @@ ipcMain.handle('copy-to-clipboard', async (event, text) => {
 // Bring window to foreground handler
 ipcMain.handle('bring-to-foreground', async () => {
   if (mainWindow) {
+    // Restore window if minimized
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    
     // Show the window if it's hidden
     if (!mainWindow.isVisible()) {
       mainWindow.show();
     }
     
-    // Focus the window
-    mainWindow.focus();
-    
-    // Bring to front on all platforms
+    // Bring to front on Windows
     mainWindow.setAlwaysOnTop(true);
-    setTimeout(() => {
-      mainWindow.setAlwaysOnTop(false);
-    }, 100);
+    mainWindow.focus();
+    mainWindow.setAlwaysOnTop(false);
     
-    log('🔝 Window brought to foreground for privacy reminder');
+    // Additional Windows-specific focus
+    if (process.platform === 'win32') {
+      mainWindow.setSkipTaskbar(false);
+      mainWindow.moveTop();
+    }
+    
+    log('🔝 Window brought to foreground');
     return { success: true };
   }
   return { success: false, error: 'Window not available' };
