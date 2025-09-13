@@ -32,39 +32,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create version info file
-      shell: cmd
-      run: |
-        (
-        echo VSVersionInfo^(
-        echo   ffi=FixedFileInfo^(
-        echo     filevers=^(1,0,0,0^),
-        echo     prodvers=^(1,0,0,0^),
-        echo     mask=0x3f,
-        echo     flags=0x0,
-        echo     OS=0x4,
-        echo     fileType=0x1,
-        echo     subtype=0x0,
-        echo     date=^(0, 0^)
-        echo     ^),
-        echo   kids=[
-        echo     StringFileInfo^([
-        echo       StringTable^(u'040904B0', [
-        echo         StringStruct^(u'CompanyName', u'MVP-Echo'^),
-        echo         StringStruct^(u'FileDescription', u'MVP-Echo Standalone Whisper'^),
-        echo         StringStruct^(u'FileVersion', u'1.0.0.0'^),
-        echo         StringStruct^(u'InternalName', u'whisper-standalone'^),
-        echo         StringStruct^(u'LegalCopyright', u'Copyright 2024 MVP-Echo'^),
-        echo         StringStruct^(u'OriginalFilename', u'whisper-standalone.exe'^),
-        echo         StringStruct^(u'ProductName', u'MVP-Echo Standalone Whisper'^),
-        echo         StringStruct^(u'ProductVersion', u'1.0.0.0'^)
-        echo       ]^)
-        echo     ]^), 
-        echo     VarFileInfo^([VarStruct^(u'Translation', [1033, 1200]^)]^)
-        echo   ]
-        echo ^)
-        ) > version_info.py
-    
     - name: Build Windows executable
       shell: cmd
       run: |
@@ -86,7 +53,6 @@ jobs:
           --hidden-import=huggingface_hub ^
           --hidden-import=numpy ^
           --hidden-import=onnxruntime ^
-          --version-file=version_info.py ^
           --optimize=2 ^
           --log-level=WARN ^
           whisper-cli.py
