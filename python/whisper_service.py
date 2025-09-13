@@ -36,6 +36,61 @@ def install_whisper():
             log(f"❌ Failed to install faster-whisper: {e}")
             return None
 
+def get_offline_model_path(model_size="tiny"):
+    """Get path to offline Whisper model if available"""
+    # Check for models in the same directory as this script
+    script_dir = Path(__file__).parent
+    models_dir = script_dir / "models"
+    
+    if models_dir.exists():
+        model_file = models_dir / f"{model_size}.pt"
+        if model_file.exists():
+            log(f"Found offline model: {model_file}")
+            return str(model_file)
+    
+    log(f"Offline model not found for {model_size}, will download")
+    return model_size  # Fallback to download
+
+def list_available_models():
+    """List all available offline Whisper models"""
+    script_dir = Path(__file__).parent
+    models_dir = script_dir / "models"
+    
+    available_models = []
+    
+    if models_dir.exists():
+        # Check for manifest file
+        manifest_file = models_dir / "manifest.json"
+        if manifest_file.exists():
+            try:
+                import json
+                with open(manifest_file, 'r') as f:
+                    manifest = json.load(f)
+                    available_models = manifest.get('models', [])
+                    log(f"Found model manifest with {len(available_models)} models")
+            except Exception as e:
+                log(f"Failed to read manifest: {e}")
+        
+        # Fallback: scan for .pt files
+        if not available_models:
+            for model_file in models_dir.glob("*.pt"):
+                model_name = model_file.stem
+                available_models.append({
+                    "name": model_name,
+                    "file": model_file.name,
+                    "description": f"Offline {model_name} model"
+                })
+    
+    if not available_models:
+        # Default available models (will be downloaded)
+        available_models = [
+            {"name": "tiny", "description": "Fastest, basic accuracy (downloads ~39MB)"},
+            {"name": "base", "description": "Good balance (downloads ~74MB)"},
+            {"name": "small", "description": "Better accuracy (downloads ~244MB)"}
+        ]
+    
+    return available_models
+
 def transcribe_audio(audio_data, model_size="tiny"):
     """Transcribe audio data using faster-whisper"""
     try:
@@ -43,9 +98,12 @@ def transcribe_audio(audio_data, model_size="tiny"):
         if not WhisperModel:
             return {"error": "Failed to load faster-whisper"}
         
-        log(f"Loading faster-whisper model: {model_size}")
+        # Try to use offline model first
+        model_path = get_offline_model_path(model_size)
+        log(f"Loading faster-whisper model: {model_size} from {model_path}")
+        
         # Use CPU for MVP, can be changed to "cuda" for GPU acceleration
-        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        model = WhisperModel(model_path, device="cpu", compute_type="int8")
         
         # Save audio data to temp file
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
@@ -96,9 +154,12 @@ def transcribe_audio_file(audio_file_path, model_size="tiny"):
         if not WhisperModel:
             return {"error": "Failed to load faster-whisper"}
         
-        log(f"Loading faster-whisper model: {model_size}")
+        # Try to use offline model first
+        model_path = get_offline_model_path(model_size)
+        log(f"Loading faster-whisper model: {model_size} from {model_path}")
+        
         # Use CPU for MVP, can be changed to "cuda" for GPU acceleration
-        model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        model = WhisperModel(model_path, device="cpu", compute_type="int8")
         
         if not os.path.exists(audio_file_path):
             return {"error": f"Audio file not found: {audio_file_path}"}
@@ -156,9 +217,12 @@ def main():
         whisper = install_whisper()
         if whisper:
             log("✅ Whisper available")
-            # List available models
-            available_models = ["tiny", "base", "small", "medium", "large"]
-            log(f"Available models: {available_models}")
+            # List available models (offline and online)
+            available_models = list_available_models()
+            offline_count = sum(1 for m in available_models if 'offline' in m.get('description', '').lower() or not 'download' in m.get('description', ''))
+            log(f"Available models: {len(available_models)} total ({offline_count} offline)")
+            for model in available_models:
+                log(f"  - {model['name']}: {model['description']}")
         else:
             log("❌ Whisper not available")
             return
@@ -194,6 +258,10 @@ def main():
                     
                 elif request.get("action") == "ping":
                     print(json.dumps({"pong": True}), flush=True)
+                    
+                elif request.get("action") == "list_models":
+                    models = list_available_models()
+                    print(json.dumps({"models": models}), flush=True)
                     
                 else:
                     print(json.dumps({"error": f"Unknown action: {request.get('action')}"}), flush=True)

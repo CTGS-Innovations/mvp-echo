@@ -6,6 +6,15 @@ const fs = require('fs');
 const os = require('os');
 const { spawn } = require('child_process');
 
+// Import Python manager for portable support
+let pythonManager;
+try {
+  const { pythonManager: pm } = require('../main/python-manager');
+  pythonManager = pm;
+} catch (error) {
+  console.log('⚠️ Python manager not available, using system Python');
+}
+
 /**
  * WhisperEngine - Production STT implementation using Python Whisper
  */
@@ -40,6 +49,30 @@ class WhisperEngine {
         throw new Error('Python service ping test failed');
       }
       
+      // Get available models
+      try {
+        const modelsResult = await this.sendRequest({ action: 'list_models' });
+        if (modelsResult.models) {
+          this.availableModels = modelsResult.models;
+          console.log(`📦 Available models: ${this.availableModels.map(m => m.name).join(', ')}`);
+          
+          // Check if any models are offline
+          const offlineModels = this.availableModels.filter(m => 
+            m.description && (m.description.includes('offline') || !m.description.includes('download'))
+          );
+          if (offlineModels.length > 0) {
+            console.log(`🔄 Offline models available: ${offlineModels.map(m => m.name).join(', ')}`);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get model list:', error);
+        this.availableModels = [
+          { name: 'tiny', description: 'Fastest, basic accuracy' },
+          { name: 'base', description: 'Good balance' },
+          { name: 'small', description: 'Better accuracy' }
+        ];
+      }
+      
       this.isInitialized = true;
       console.log(`✅ Python Whisper engine initialized successfully`);
       console.log(`🐍 Model: faster-whisper ${modelSize}`);
@@ -61,13 +94,59 @@ class WhisperEngine {
       return; // Already running
     }
 
+    // Get Python executable path (portable or system)
+    let pythonCmd = null;
+    
+    if (pythonManager) {
+      try {
+        console.log('🎁 Using portable Python environment...');
+        pythonCmd = await pythonManager.getPythonEnvironment();
+        console.log(`✅ Portable Python ready: ${pythonCmd}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to setup portable Python, falling back to system Python:', error);
+      }
+    }
+    
+    // Fall back to system Python if portable not available
+    if (!pythonCmd) {
+      // Try different Python commands
+      const pythonCommands = ['python', 'python3', 'py'];
+      
+      for (const cmd of pythonCommands) {
+        try {
+          // Test if command exists
+          await new Promise((resolve, reject) => {
+            const testProcess = spawn(cmd, ['--version'], { stdio: 'ignore' });
+            testProcess.on('close', (code) => {
+              if (code === 0) resolve();
+              else reject();
+            });
+            testProcess.on('error', reject);
+          });
+          pythonCmd = cmd;
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (!pythonCmd) {
+        throw new Error('Python not found. Please install Python 3.7+ or use portable version');
+      }
+    }
+
+    console.log(`🐍 Using Python command: ${pythonCmd}`);
+
     // Check multiple possible locations for the Python script
     const possiblePaths = [
       path.join(__dirname, '../../python/whisper_service.py'),
       path.join(process.resourcesPath, 'python/whisper_service.py'),
       path.join(process.cwd(), 'python/whisper_service.py'),
-      path.join(__dirname, '../../../python/whisper_service.py')
-    ];
+      path.join(__dirname, '../../../python/whisper_service.py'),
+      // For portable version, also check in temp extracted location
+      pythonManager && pythonManager.getSessionInfo().tempDir ? 
+        path.join(pythonManager.getSessionInfo().tempDir, 'whisper_service.py') : null
+    ].filter(p => p !== null);
 
     let pythonScript = null;
     for (const scriptPath of possiblePaths) {
@@ -85,34 +164,6 @@ class WhisperEngine {
     }
     
     console.log(`🐍 Starting Python Whisper service: ${pythonScript}`);
-    
-    // Try different Python commands
-    const pythonCommands = ['python', 'python3', 'py'];
-    let pythonCmd = null;
-    
-    for (const cmd of pythonCommands) {
-      try {
-        // Test if command exists
-        await new Promise((resolve, reject) => {
-          const testProcess = spawn(cmd, ['--version'], { stdio: 'ignore' });
-          testProcess.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject();
-          });
-          testProcess.on('error', reject);
-        });
-        pythonCmd = cmd;
-        break;
-      } catch (e) {
-        continue;
-      }
-    }
-
-    if (!pythonCmd) {
-      throw new Error('Python not found. Please install Python 3.7+');
-    }
-
-    console.log(`🐍 Using Python command: ${pythonCmd}`);
 
     this.pythonProcess = spawn(pythonCmd, [pythonScript], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -439,6 +490,54 @@ class WhisperEngine {
   }
 
   /**
+   * Get available models
+   */
+  getAvailableModels() {
+    return this.availableModels || [
+      { name: 'tiny', description: 'Fastest, basic accuracy' },
+      { name: 'base', description: 'Good balance' },
+      { name: 'small', description: 'Better accuracy' }
+    ];
+  }
+
+  /**
+   * Switch to a different model
+   */
+  async switchModel(newModelSize) {
+    if (!this.isInitialized) {
+      throw new Error('Engine not initialized. Call initialize() first.');
+    }
+
+    if (this.modelSize === newModelSize) {
+      console.log(`📦 Already using model: ${newModelSize}`);
+      return true;
+    }
+
+    console.log(`🔄 Switching from ${this.modelSize} to ${newModelSize} model...`);
+    
+    // Update model size
+    const oldModel = this.modelSize;
+    this.modelSize = newModelSize;
+
+    try {
+      // Test if the new model is available by doing a quick ping
+      // The Python service will load the new model on the next transcription request
+      const testResult = await this.sendRequest({ action: 'ping' });
+      if (!testResult.pong) {
+        throw new Error('Service not responding after model switch');
+      }
+
+      console.log(`✅ Switched to ${newModelSize} model successfully`);
+      return true;
+    } catch (error) {
+      // Revert to old model on failure
+      this.modelSize = oldModel;
+      console.error(`❌ Failed to switch to ${newModelSize} model:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get engine status
    */
   getStatus() {
@@ -447,7 +546,9 @@ class WhisperEngine {
       mode: this.executionMode,
       modelPath: `faster-whisper ${this.modelSize}`,
       sessionActive: this.pythonProcess !== null,
-      pythonPid: this.pythonProcess?.pid || null
+      pythonPid: this.pythonProcess?.pid || null,
+      availableModels: this.getAvailableModels(),
+      currentModel: this.modelSize
     };
   }
 
@@ -514,6 +615,12 @@ class WhisperEngine {
       
       // Clean up any leftover temp files
       await this.cleanupTempFiles();
+      
+      // Clean up portable Python environment if used
+      if (pythonManager) {
+        console.log('🧹 Cleaning up portable Python environment...');
+        await pythonManager.cleanup();
+      }
       
       this.isInitialized = false;
       console.log('🧹 Python Whisper engine cleaned up');

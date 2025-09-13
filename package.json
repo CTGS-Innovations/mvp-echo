@@ -7,10 +7,15 @@
     "dev": "echo \"🚀 Starting MVP-Echo development...\" && echo \"\" && concurrently --prefix-colors \"cyan,yellow\" --prefix \"[{name}]\" --names \"renderer,electron\" \"npm:dev:renderer\" \"npm:dev:electron\"",
     "dev:renderer": "echo \"📦 Starting Vite renderer...\" && vite --port 5173",
     "dev:electron": "echo \"⚡ Starting Electron main process...\" && set NODE_ENV=development&& electron app/main/main-simple.js",
-    "build": "echo \"🔨 Building for production...\" && vite build",
-    "pack": "echo \"📦 Packaging MVP-Echo for Windows...\" && npm run build && electron-builder --win --publish=never",
+    "dev:portable": "echo \"🎁 Starting portable development mode...\" && set NODE_ENV=development&& set PORTABLE_MODE=true&& electron app/main/main-simple.js",
+    "clean": "echo \"🧹 Step 1: Cleaning...\" && npm run clean:python",
+    "build": "echo \"🔨 Step 2: Building frontend...\" && vite build",
+    "prepare": "echo \"🐍 Step 2b: Preparing Python with models...\" && powershell -ExecutionPolicy Bypass -File scripts/prepare-python.ps1 -SkipModels",
+    "pack": "echo \"📦 Step 3: Packaging portable executable...\" && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --publish=never",
     "dist": "echo \"🚀 Building Windows installer...\" && npm run build && electron-builder --win --publish=never",
     "cleanup": "echo \"🧹 Cleaning dependencies...\" && rmdir /s /q node_modules && del package-lock.json && npm install",
+    "clean:python": "echo \"🧹 Cleaning Python embedded distribution...\" && powershell -ExecutionPolicy Bypass -File scripts/prepare-python.ps1 -Clean",
+    "test:python": "echo \"🧪 Testing Python embedded setup...\" && powershell -ExecutionPolicy Bypass -File scripts/test-powershell.ps1 -TestSyntax",
     "start": "echo \"🎯 Starting built application...\" && electron .",
     "test": "echo \"🧪 No tests yet\""
   },
@@ -62,6 +67,10 @@
       {
         "from": "python",
         "to": "resources/python"
+      },
+      {
+        "from": "models",
+        "to": "resources/models"
       }
     ],
     "win": {

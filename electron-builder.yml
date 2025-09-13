@@ -18,6 +18,12 @@ files:
 extraResources:
   - from: "app/models/manifest.json"
     to: "models/manifest.json"
+  - from: "python"
+    to: "python"
+  - from: "python-embedded"
+    to: "python-embedded"
+    filter: 
+      - "**/*"
 
 win:
   target:

@@ -4,6 +4,16 @@ const os = require('os');
 const fs = require('fs');
 const { whisperEngine } = require('../stt/whisper-engine');
 
+// Import Python manager for portable support
+let pythonManager = null;
+try {
+  const { pythonManager: pm } = require('./python-manager');
+  pythonManager = pm;
+  log('✅ Python manager loaded for portable support');
+} catch (error) {
+  log('⚠️ Python manager not available, using system Python only');
+}
+
 // File logging setup
 const logPath = path.join(os.tmpdir(), 'mvp-echo-debug.log');
 
@@ -182,6 +192,16 @@ app.on('before-quit', async () => {
   } catch (error) {
     log('Error during app cleanup: ' + error.message);
   }
+  
+  // Cleanup Python manager if available
+  if (pythonManager) {
+    try {
+      await pythonManager.cleanup();
+      log('✅ Python manager cleanup completed');
+    } catch (error) {
+      log('Error during Python manager cleanup: ' + error.message);
+    }
+  }
 });
 
 app.on('activate', () => {
@@ -214,6 +234,9 @@ ipcMain.handle('get-system-info', async () => {
     ? whisperStatus.modelPath 
     : 'faster-whisper tiny'; // Default model that will be used
   
+  // Get portable session info if available
+  const portableInfo = pythonManager ? pythonManager.getSessionInfo() : { active: false, portable: false };
+  
   return {
     platform: os.platform(),
     arch: os.arch(),
@@ -224,7 +247,20 @@ ipcMain.handle('get-system-info', async () => {
     hasGpu,
     gpuProvider,
     whisperModel: modelInfo,
-    version: '1.0.0'
+    version: '1.0.0',
+    portable: portableInfo
+  };
+});
+
+// Portable session info handler
+ipcMain.handle('get-portable-info', async () => {
+  if (!pythonManager) {
+    return { available: false, message: 'Portable mode not available' };
+  }
+  
+  return {
+    available: true,
+    session: pythonManager.getSessionInfo()
   };
 });
 
