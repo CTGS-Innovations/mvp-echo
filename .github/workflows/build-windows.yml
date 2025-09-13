@@ -66,6 +66,7 @@ jobs:
         ) > version_info.py
     
     - name: Build Windows executable
+      shell: cmd
       run: |
         python -m PyInstaller ^
           --onefile ^
