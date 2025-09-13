@@ -3,6 +3,22 @@ faster-whisper>=1.0.0
 torch>=2.0.0
 pyinstaller>=6.0.0
 
-# Optional GPU acceleration
-# For NVIDIA GPU support, also install:
-# torch --index-url https://download.pytorch.org/whl/cu124
+# Core dependencies for faster-whisper
+ctranslate2>=4.0.0
+tokenizers>=0.13.0
+huggingface-hub>=0.10.0
+numpy>=1.21.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Additional dependencies for complete functionality
+tqdm>=4.62.0
+av>=10.0.0
+
+# GPU support (CUDA) - will install CPU versions if GPU not available
+torch-audio>=2.0.0
+
+# Optional but recommended for better performance
+numba>=0.56.0
