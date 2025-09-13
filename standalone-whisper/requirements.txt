@@ -1,0 +1,8 @@
+# Dependencies for MVP-Echo Standalone Whisper
+faster-whisper>=1.0.0
+torch>=2.0.0
+pyinstaller>=6.0.0
+
+# Optional GPU acceleration
+# For NVIDIA GPU support, also install:
+# torch --index-url https://download.pytorch.org/whl/cu124

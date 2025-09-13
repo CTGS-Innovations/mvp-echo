@@ -26,3 +26,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return ipcRenderer.on('global-shortcut-toggle', callback);
   },
 });
+
+// Also expose electron IPC for setup and engine components
+contextBridge.exposeInMainWorld('electron', {
+  ipcRenderer: {
+    invoke: (channel, ...args) => {
+      const validChannels = [
+        'init:check', 'init:start', 'init:get-status',
+        'engine:status', 'engine:switch', 'engine:upgrade', 'engine:process-audio'
+      ];
+      if (validChannels.includes(channel)) {
+        return ipcRenderer.invoke(channel, ...args);
+      }
+    },
+    on: (channel, callback) => {
+      const validChannels = ['init:status', 'engine:upgrade-progress'];
+      if (validChannels.includes(channel)) {
+        ipcRenderer.on(channel, callback);
+      }
+    },
+    removeListener: (channel, callback) => {
+      ipcRenderer.removeListener(channel, callback);
+    }
+  }
+});

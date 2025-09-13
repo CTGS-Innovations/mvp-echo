@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const { whisperEngine } = require('../stt/whisper-engine');
+const { EngineManager } = require('../stt/engine-manager');
 
 // Import Python manager for portable support
 let pythonManager = null;
@@ -13,6 +13,9 @@ try {
 } catch (error) {
   log('⚠️ Python manager not available, using system Python only');
 }
+
+// Initialize the engine manager (handles both native and Python engines)
+const engineManager = new EngineManager();
 
 // File logging setup
 const logPath = path.join(os.tmpdir(), 'mvp-echo-debug.log');
@@ -119,8 +122,12 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
+  
+  // Initialize engine manager
+  await engineManager.initialize();
+  engineManager.setupIPC(mainWindow);
   
   // Register global shortcut for Ctrl+Alt+Z - toggle recording
   const ret = globalShortcut.register('CommandOrControl+Alt+Z', () => {
@@ -323,14 +330,8 @@ ipcMain.handle('processAudio', async (event, audioArray) => {
   log('🎤 Processing audio array of length: ' + audioArray.length);
   
   try {
-    // Initialize Whisper engine if not already done
-    if (!whisperEngine.getStatus().initialized) {
-      log('🔧 Initializing Whisper engine...');
-      await whisperEngine.initialize('tiny'); // Start with tiny model for speed
-    }
-    
-    // Process audio with real Whisper engine
-    const result = await whisperEngine.transcribe(audioArray);
+    // Process audio with engine manager (uses native or Python)
+    const result = await engineManager.processAudio(audioArray);
     
     log('✅ Whisper transcription result: ' + JSON.stringify(result));
     

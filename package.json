@@ -10,8 +10,9 @@
     "dev:portable": "echo \"🎁 Starting portable development mode...\" && set NODE_ENV=development&& set PORTABLE_MODE=true&& electron app/main/main-simple.js",
     "clean": "echo \"🧹 Step 1: Cleaning...\" && npm run clean:python",
     "build": "echo \"🔨 Step 2: Building frontend...\" && vite build",
-    "prepare": "echo \"🐍 Step 2b: Preparing Python with models...\" && powershell -ExecutionPolicy Bypass -File scripts/prepare-python.ps1 -SkipModels",
-    "pack": "echo \"📦 Step 3: Packaging portable executable...\" && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --publish=never",
+    "build:standalone": "echo \"🏗️ Building standalone whisper executable...\" && bash scripts/build-native-whisper.sh",
+    "prepare": "echo \"🚀 Step 2b: Preparing Whisper Native...\" && npm run build:standalone",
+    "pack": "echo \"📦 Step 3: Packaging portable executable...\" && npm run prepare && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win portable --publish=never",
     "dist": "echo \"🚀 Building Windows installer...\" && npm run build && electron-builder --win --publish=never",
     "cleanup": "echo \"🧹 Cleaning dependencies...\" && rmdir /s /q node_modules && del package-lock.json && npm install",
     "clean:python": "echo \"🧹 Cleaning Python embedded distribution...\" && powershell -ExecutionPolicy Bypass -File scripts/prepare-python.ps1 -Clean",
@@ -65,12 +66,8 @@
         "to": "resources/stt"
       },
       {
-        "from": "python",
-        "to": "resources/python"
-      },
-      {
-        "from": "models",
-        "to": "resources/models"
+        "from": "whisper-bin/whisper-standalone.exe",
+        "to": "resources/bin/whisper-standalone.exe"
       }
     ],
     "win": {

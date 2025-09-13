@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useReducer } from 'react';
 import OceanVisualizer from './components/OceanVisualizer';
+import { SetupProgress } from './components/SetupProgress';
+import { EngineSelector } from './components/EngineSelector';
 
 // Audio recording functionality (renderer process)
 class AudioCapture {
@@ -136,6 +138,10 @@ export default function App() {
   
   // Check if running in Electron
   const isElectron = typeof (window as any).electronAPI !== 'undefined';
+  
+  // Setup state
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showSetup, setShowSetup] = useState(true);
   
   // Debug: Log when component mounts and cleanup on unmount
   useEffect(() => {
@@ -586,6 +592,21 @@ export default function App() {
           </div>
         </footer>
       </div>
+      
+      {/* Setup Progress - Shows at bottom during initialization */}
+      {showSetup && (
+        <SetupProgress 
+          onComplete={() => {
+            setIsInitialized(true);
+            setShowSetup(false);
+          }}
+        />
+      )}
+      
+      {/* Engine Selector - Shows engine status and upgrade option */}
+      {isInitialized && !showSetup && (
+        <EngineSelector />
+      )}
     </div>
   );
 }
