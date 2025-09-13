@@ -32,9 +32,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create build directory
-      run: mkdir build
-    
     - name: Create version info file
       shell: cmd
       run: |
@@ -66,7 +63,7 @@ jobs:
         echo     VarFileInfo^([VarStruct^(u'Translation', [1033, 1200]^)]^)
         echo   ]
         echo ^)
-        ) > build\version_info.py
+        ) > version_info.py
     
     - name: Build Windows executable
       shell: cmd
@@ -89,7 +86,7 @@ jobs:
           --hidden-import=huggingface_hub ^
           --hidden-import=numpy ^
           --hidden-import=onnxruntime ^
-          --version-file=build\version_info.py ^
+          --version-file=version_info.py ^
           --optimize=2 ^
           --log-level=WARN ^
           whisper-cli.py
