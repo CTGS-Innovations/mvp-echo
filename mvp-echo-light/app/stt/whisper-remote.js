@@ -129,7 +129,10 @@ class WhisperRemoteEngine {
       const model = options.model || this.selectedModel;
       formData.append('model', model);
 
-      // Add language if specified
+      // Request verbose_json to get language detection
+      formData.append('response_format', 'verbose_json');
+
+      // Add language if specified (forces language instead of auto-detect)
       if (options.language || this.language) {
         formData.append('language', options.language || this.language);
       }
@@ -153,9 +156,52 @@ class WhisperRemoteEngine {
       const result = await response.json();
       const processingTime = Date.now() - startTime;
 
+      // Log the full response to see what fields the server returns
+      console.log('Cloud transcription response:', JSON.stringify(result, null, 2));
+
+      // Support various language field names from different server implementations
+      let detectedLanguage = result.language
+        || result.detected_language
+        || result.lang
+        || result.detected_lang
+        || (result.segments && result.segments[0]?.language)
+        || 'en';
+
+      // Convert full language names to ISO codes (OpenAI returns "english", "spanish", etc.)
+      const languageMap = {
+        'english': 'en',
+        'spanish': 'es',
+        'french': 'fr',
+        'german': 'de',
+        'chinese': 'zh',
+        'japanese': 'ja',
+        'italian': 'it',
+        'portuguese': 'pt',
+        'russian': 'ru',
+        'korean': 'ko',
+        'dutch': 'nl',
+        'polish': 'pl',
+        'arabic': 'ar',
+        'hindi': 'hi',
+        'turkish': 'tr',
+        'vietnamese': 'vi',
+        'thai': 'th',
+        'indonesian': 'id',
+        'swedish': 'sv',
+        'danish': 'da',
+        'norwegian': 'no',
+        'finnish': 'fi'
+      };
+
+      // Normalize to lowercase and map to ISO code if needed
+      const langLower = detectedLanguage.toLowerCase();
+      if (languageMap[langLower]) {
+        detectedLanguage = languageMap[langLower];
+      }
+
       return {
         text: result.text || result.transcription || '',
-        language: result.language || 'en',
+        language: detectedLanguage,
         duration: result.duration || 0,
         processingTime: processingTime,
         engine: `cloud (${model.split('/').pop()})`,

@@ -1,6 +1,6 @@
 {
   "name": "mvp-echo-light",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "MVP-Echo Light - Cloud-Based Voice-to-Text Transcription",
   "main": "app/main/main-simple.js",
   "scripts": {

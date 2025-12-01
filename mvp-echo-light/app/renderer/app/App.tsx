@@ -629,9 +629,6 @@ export default function App() {
                           {detectedLanguage.toUpperCase()}
                         </span>
                       )}
-                      <span className="text-[9px] px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">
-                        {currentModelDisplay}
-                      </span>
                     </div>
                     <button
                       onClick={() => {
@@ -692,20 +689,26 @@ export default function App() {
         </div>
         </main>
         
-        {/* Compact Footer Status Bar */}
+        {/* Compact Footer Status Bar - Two Lines */}
         <footer className="bg-muted/30 border-t border-border px-4 py-2">
-          <div className="container max-w-4xl mx-auto">
+          <div className="container max-w-4xl mx-auto space-y-1">
+            {/* Line 1: Model name in purple */}
+            <div className="flex items-center justify-center">
+              <span className="text-[10px] px-3 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">
+                {currentModelDisplay}
+              </span>
+            </div>
+
+            {/* Line 2: Status and controls */}
             <div className="flex items-center justify-between text-[10px]">
-              {/* Condensed System Information */}
+              {/* Left: Version and Cloud */}
               <div className="flex items-center gap-2 text-muted-foreground">
-                <span>v1.1.0 Light</span>
+                <span>v1.2.0 Light</span>
                 <span>•</span>
                 <span>☁️ Cloud</span>
-                <span>•</span>
-                <span>model: {currentModelDisplay}</span>
               </div>
-              
-              {/* Status and Controls */}
+
+              {/* Right: Status and Controls */}
               <div className="flex items-center gap-3">
                 {/* Status Indicator */}
                 <div className="flex items-center gap-1.5">
@@ -733,7 +736,7 @@ export default function App() {
                     </>
                   )}
                 </div>
-                
+
                 {/* Settings Toggle Button */}
                 <button
                   onClick={() => setShowSettings(!showSettings)}
@@ -828,12 +831,12 @@ export default function App() {
                         className="w-full px-2 py-1.5 text-xs bg-white border border-border rounded"
                       >
                         <option value="">Auto-detect</option>
-                        <option value="en">English</option>
-                        <option value="es">Spanish</option>
-                        <option value="fr">French</option>
-                        <option value="de">German</option>
-                        <option value="zh">Chinese</option>
-                        <option value="ja">Japanese</option>
+                        <option value="en">English (EN)</option>
+                        <option value="es">Spanish (ES)</option>
+                        <option value="fr">French (FR)</option>
+                        <option value="de">German (DE)</option>
+                        <option value="zh">Chinese (ZH)</option>
+                        <option value="ja">Japanese (JA)</option>
                       </select>
                     </div>
                   </div>
