@@ -76,32 +76,82 @@ class WhisperRemoteEngine {
       const baseUrl = this.endpointUrl.replace('/v1/audio/transcriptions', '');
       const healthUrl = `${baseUrl}/health`;
 
-      const response = await fetch(healthUrl);
+      console.log('Testing connection to:', healthUrl);
 
-      if (response.ok) {
-        // Try to get models list
-        try {
-          const modelsResponse = await fetch(`${baseUrl}/v1/models`);
-          const modelsData = await modelsResponse.json();
-          const availableModels = modelsData.data?.map(m => m.id) || [];
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-          return {
-            success: true,
-            device: 'cloud',
-            models: availableModels,
-            modelCount: availableModels.length
-          };
-        } catch (e) {
-          return {
-            success: true,
-            device: 'cloud'
-          };
+      try {
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'MVP-Echo/1.2.0'
+          }
+        });
+
+        clearTimeout(timeoutId);
+        console.log('Health check response status:', response.status);
+
+        if (response.ok) {
+          // Try to get models list
+          try {
+            const modelsResponse = await fetch(`${baseUrl}/v1/models`, {
+              headers: {
+                'Accept': 'application/json',
+                'User-Agent': 'MVP-Echo/1.2.0'
+              }
+            });
+            const modelsData = await modelsResponse.json();
+            const availableModels = modelsData.data?.map(m => m.id) || [];
+
+            return {
+              success: true,
+              device: 'cloud',
+              models: availableModels,
+              modelCount: availableModels.length
+            };
+          } catch (e) {
+            console.log('Models endpoint not available, but health check passed');
+            return {
+              success: true,
+              device: 'cloud'
+            };
+          }
+        } else {
+          const errorText = await response.text().catch(() => 'Unknown error');
+          console.error('Health check failed:', response.status, errorText);
+          return { success: false, error: `Health check failed: HTTP ${response.status}` };
         }
-      } else {
-        return { success: false, error: 'Health check failed' };
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+
+        if (fetchError.name === 'AbortError') {
+          console.error('Connection timeout after 10 seconds');
+          return { success: false, error: 'Connection timeout - server not responding' };
+        }
+        throw fetchError;
       }
     } catch (error) {
-      return { success: false, error: error.message };
+      console.error('Connection test error:', error);
+
+      // Provide more helpful error messages
+      let errorMessage = error.message;
+      if (error.code === 'ECONNREFUSED') {
+        errorMessage = 'Connection refused - server may be offline';
+      } else if (error.code === 'ENOTFOUND') {
+        errorMessage = 'Server not found - check the URL';
+      } else if (error.code === 'CERT_HAS_EXPIRED' || error.message.includes('certificate')) {
+        errorMessage = 'SSL certificate error - check server certificate';
+      } else if (error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
+        errorMessage = 'SSL certificate verification failed';
+      } else if (error.message.includes('self signed')) {
+        errorMessage = 'Self-signed certificate not trusted';
+      }
+
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -131,6 +181,9 @@ class WhisperRemoteEngine {
 
       // Request verbose_json to get language detection
       formData.append('response_format', 'verbose_json');
+
+      // Temperature 0 for deterministic output (OpenAI API compatible)
+      formData.append('temperature', '0');
 
       // Add language if specified (forces language instead of auto-detect)
       if (options.language || this.language) {
@@ -199,8 +252,14 @@ class WhisperRemoteEngine {
         detectedLanguage = languageMap[langLower];
       }
 
+      // Get raw text
+      let text = result.text || result.transcription || '';
+
+      // Remove hallucinated repetitions (e.g., "Thank you. Thank you. Thank you...")
+      text = this.removeRepetitions(text);
+
       return {
-        text: result.text || result.transcription || '',
+        text: text,
         language: detectedLanguage,
         duration: result.duration || 0,
         processingTime: processingTime,
@@ -231,6 +290,40 @@ class WhisperRemoteEngine {
   setLanguage(language) {
     this.language = language;
     this.saveConfig();
+  }
+
+  /**
+   * Remove hallucinated repetitions from transcription text
+   * Detects and removes repeated phrases like "Thank you. Thank you. Thank you..."
+   */
+  removeRepetitions(text) {
+    if (!text || text.length < 20) return text;
+
+    // Split into sentences
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    if (sentences.length < 3) return text;
+
+    // Check for repeated sentences at the end
+    const lastSentence = sentences[sentences.length - 1].trim().toLowerCase();
+    let repeatCount = 0;
+
+    // Count how many times the last sentence repeats at the end
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      if (sentences[i].trim().toLowerCase() === lastSentence) {
+        repeatCount++;
+      } else {
+        break;
+      }
+    }
+
+    // If more than 2 repetitions, keep only 1
+    if (repeatCount > 2) {
+      const cleanSentences = sentences.slice(0, sentences.length - repeatCount + 1);
+      console.log(`Removed ${repeatCount - 1} repeated phrases: "${lastSentence}"`);
+      return cleanSentences.join(' ');
+    }
+
+    return text;
   }
 }
 

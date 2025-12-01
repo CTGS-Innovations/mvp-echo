@@ -703,7 +703,7 @@ export default function App() {
             <div className="flex items-center justify-between text-[10px]">
               {/* Left: Version and Cloud */}
               <div className="flex items-center gap-2 text-muted-foreground">
-                <span>v1.2.0 Light</span>
+                <span>v1.3.0 Light</span>
                 <span>•</span>
                 <span>☁️ Cloud</span>
               </div>
