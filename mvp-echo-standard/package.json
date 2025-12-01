@@ -1,7 +1,7 @@
 {
-  "name": "mvp-echo",
+  "name": "mvp-echo-standard",
   "version": "1.1.0",
-  "description": "MVP-Echo - Windows 11 Voice-to-Text Transcription App",
+  "description": "MVP-Echo - Local Voice-to-Text with GPU/CPU Support",
   "main": "app/main/main-simple.js",
   "scripts": {
     "dev": "echo \"🚀 Starting MVP-Echo development...\" && echo \"\" && concurrently --prefix-colors \"cyan,yellow\" --prefix \"[{name}]\" --names \"renderer,electron\" \"npm:dev:renderer\" \"npm:dev:electron\"",
